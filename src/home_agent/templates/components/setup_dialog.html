@@ -15,6 +15,16 @@
       <label>Allowed guest IDs<input id="setup-guests" placeholder="100,101"></label>
       <label class="wide checkbox"><input type="checkbox" id="setup-insecure"><span>Disable Proxmox TLS verification <strong>(unsafe)</strong></span></label>
     </div>
+    <div class="setup-section-heading">
+      <div><span class="section-kicker">Optional diagnostics</span><h3>Restricted SSH hosts</h3></div>
+      <button type="button" class="button secondary" id="add-ssh-host">Add host</button>
+    </div>
+    <div class="setup-grid">
+      <label>SSH username<input id="setup-ssh-username" placeholder="diagnostic-agent"></label>
+      <label>Private key path<input id="setup-ssh-key-file" placeholder="C:\Users\you\.ssh\home-agent"></label>
+    </div>
+    <div id="ssh-hosts"></div>
+    <div class="setup-note">SSH uses existing host keys and a dedicated key file. Services and ports are strict allowlists; arbitrary shell commands are never exposed.</div>
     <div class="setup-note" id="secret-status"></div>
     <div id="setup-status" role="status"></div>
     <div class="setup-buttons">

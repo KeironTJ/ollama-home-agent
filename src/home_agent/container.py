@@ -7,7 +7,9 @@ from .integrations import OllamaClient, ProxmoxClient
 from .services.agent import AgentRunner
 from .services.approvals import ApprovalStore
 from .services.audit import AuditLog
+from .services.coordinator import MasterCoordinator
 from .services.history import ChatHistory
+from .services.specialists import SpecialistRegistry
 from .tools import DiagnosticTools
 
 
@@ -21,6 +23,7 @@ class AppServices:
     ollama: OllamaClient
     tools: DiagnosticTools
     runner: AgentRunner
+    coordinator: MasterCoordinator
 
 
 def build_services(settings: Settings) -> AppServices:
@@ -32,6 +35,7 @@ def build_services(settings: Settings) -> AppServices:
     ollama = OllamaClient(settings)
     tools = DiagnosticTools(settings, proxmox, approvals, audit)
     runner = AgentRunner(settings, ollama, tools, audit)
+    coordinator = MasterCoordinator(runner, SpecialistRegistry(), audit)
     return AppServices(
         settings=settings,
         audit=audit,
@@ -41,4 +45,5 @@ def build_services(settings: Settings) -> AppServices:
         ollama=ollama,
         tools=tools,
         runner=runner,
+        coordinator=coordinator,
     )

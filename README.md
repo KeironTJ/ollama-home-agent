@@ -19,6 +19,8 @@ src/home_agent/
 │   └── security.py    # redaction and output bounds
 ├── services/
 │   ├── agent.py       # bounded Ollama orchestration loop
+│   ├── coordinator.py # fixed routing and specialist execution
+│   ├── specialists.py # specialist definitions and tool scopes
 │   ├── approvals.py   # transactional approval lifecycle
 │   ├── audit.py       # security audit persistence
 │   └── history.py     # bounded conversation persistence
@@ -50,6 +52,8 @@ src/home_agent/
 
 `container.py` is the composition root: it creates clients, persistence services, approvals, tool sets, and the agent runner once per application instance. Dependencies flow inward from routers to services/tools, then to explicit integrations and core primitives. New HTTP surfaces use a router; new diagnostic capabilities use an isolated tool set and are registered in `tools/registry.py`.
 
+The master coordinator routes each request to a fixed specialist registry. Minecraft, Proxmox, network, and general diagnostics each receive a narrow prompt and an explicit subset of currently available tools. Model-generated specialist names or tools cannot be loaded dynamically, and every specialist shares the same allowlist, audit, output-limit, and approval boundaries.
+
 ## Windows setup
 
 Prerequisites:
@@ -80,7 +84,7 @@ python -m home_agent
 
 Open <http://127.0.0.1:8080>. Check <http://127.0.0.1:8080/health> if chat reports that Ollama is unavailable. `llama3.1:8b` is the recommended default because it supports Ollama tool calling; change `HOME_AGENT_OLLAMA_MODEL` if another installed model proves more reliable in your environment.
 
-The root page is an agent dashboard. Open **Home diagnostics** to use the chat at <http://127.0.0.1:8080/agents/home-diagnostics>. Conversations are stored locally in the same SQLite database as the audit data, with secret redaction, bounded message sizes, a 200-message limit per conversation, and a 100-conversation retention limit. The chat sidebar can reopen or delete saved conversations.
+The root page is an agent dashboard. Open **Home diagnostics** to use the chat at <http://127.0.0.1:8080/agents/home-diagnostics>. Typed tool results are returned as structured artifacts and rendered as status cards with human-readable CPU, memory, uptime, guests, and ports. Conversations and their artifacts are stored locally in the same SQLite database as the audit data, with secret redaction, bounded message sizes, a 200-message limit per conversation, and a 100-conversation retention limit. The chat sidebar can reopen or delete saved conversations.
 
 Open **Configuration** from the landing dashboard to configure non-secret local settings such as URLs, model, CA path, token ID, and Proxmox allowlists. The setup component writes the ignored `home-agent.config.json` file. Click **Restart application** to stop Uvicorn gracefully, reload configuration, restart on the same port, and refresh the page; this is available when launched with `python -m home_agent`. Setup and restart are available only while the app is bound to and accessed from localhost, and both writes require a per-process anti-CSRF token. The Proxmox token secret is deliberately never returned to or stored by the web page; keep it in `.env`.
 
@@ -128,7 +132,7 @@ HOME_AGENT_PROXMOX_ALLOWED_GUESTS=100,101
 
 For example, if Minecraft is VM `100`, include `100`. Guest discovery only searches this allowlisted subset.
 
-Optional SSH uses a dedicated key and rejects unknown host keys. Password authentication and arbitrary shell commands are not supported:
+Optional SSH uses a dedicated key and rejects unknown host keys. Password authentication and arbitrary shell commands are not supported. Configure hosts in the dashboard under **Configuration → Restricted SSH hosts**, or directly with:
 
 ```dotenv
 HOME_AGENT_SSH_USERNAME=diagnostic-agent

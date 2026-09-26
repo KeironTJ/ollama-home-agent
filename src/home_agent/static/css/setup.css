@@ -10,5 +10,12 @@ dialog::backdrop { background: #06080dcc; backdrop-filter: blur(3px); }
 .setup-grid .checkbox { flex-direction: row; align-items: center; padding: 6px 0; }
 .setup-note { padding: 10px; background: #202938; border-radius: 8px; color: #bac5d7; font-size: 13px; line-height: 1.45; margin: 12px 0; }
 .setup-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.setup-section-heading { display: flex; justify-content: space-between; align-items: end; margin: 22px 0 12px; }
+.setup-section-heading h3 { margin: 3px 0 0; font-size: 16px; }
+.ssh-host-row { display: grid; grid-template-columns: 1fr 1.5fr 1.2fr 1fr auto; gap: 8px; align-items: end; margin-top: 8px; padding: 10px; border: 1px solid #344157; border-radius: 9px; background: #111822; }
+.ssh-host-row label { display: flex; flex-direction: column; gap: 4px; color: #9eacc0; font-size: 11px; }
+.ssh-host-row input { min-width: 0; width: 100%; background: #0f141c; color: inherit; border: 1px solid #3d485b; border-radius: 7px; padding: 8px; }
+.ssh-host-remove { padding: 8px 10px; background: #4d292d; }
 #setup-status { margin-top: 10px; min-height: 20px; color: #ffd18b; }
-@media (max-width: 600px) { .setup-grid { grid-template-columns: 1fr; } .setup-grid .wide { grid-column: auto; } }
+@media (max-width: 760px) { .ssh-host-row { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .setup-grid, .ssh-host-row { grid-template-columns: 1fr; } .setup-grid .wide { grid-column: auto; } }

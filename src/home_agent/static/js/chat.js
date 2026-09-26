@@ -8,11 +8,120 @@ let conversations = [];
 let recorder;
 let chunks = [];
 
-function addMessage(text, kind = "assistant") {
+function formatBytes(value) {
+  if (value === null || value === undefined) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let amount = Number(value);
+  let unit = 0;
+  while (Math.abs(amount) >= 1024 && unit < units.length - 1) {
+    amount /= 1024;
+    unit++;
+  }
+  return `${amount.toFixed(unit > 1 ? 1 : 0)} ${units[unit]}`;
+}
+
+function formatUptime(seconds) {
+  if (seconds === null || seconds === undefined) return "—";
+  const value = Number(seconds);
+  const days = Math.floor(value / 86400);
+  const hours = Math.floor((value % 86400) / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  return [days && `${days}d`, hours && `${hours}h`, `${minutes}m`].filter(Boolean).join(" ");
+}
+
+function statusPill(status) {
+  const pill = document.createElement("span");
+  pill.className = `status-pill ${status === "running" || status === "online" ? "healthy" : "inactive"}`;
+  pill.textContent = status || "unknown";
+  return pill;
+}
+
+function metric(label, value) {
+  const item = document.createElement("div");
+  item.className = "artifact-metric";
+  const name = document.createElement("span");
+  name.textContent = label;
+  const content = document.createElement("strong");
+  content.textContent = value;
+  item.append(name, content);
+  return item;
+}
+
+function renderArtifact(artifact) {
+  if (artifact.type === "routing") {
+    const route = document.createElement("div");
+    route.className = "specialist-route";
+    route.textContent = `Routed to ${artifact.data?.name || "specialist"}`;
+    route.title = artifact.data?.description || "";
+    return route;
+  }
+  const card = document.createElement("article");
+  card.className = "artifact-card";
+  const data = artifact.data || {};
+  if (artifact.type === "infrastructure") {
+    const heading = document.createElement("div");
+    heading.className = "artifact-heading";
+    heading.textContent = `Infrastructure · ${(data.nodes || []).length} node · ${(data.guests || []).length} guests`;
+    card.appendChild(heading);
+    const grid = document.createElement("div");
+    grid.className = "guest-grid";
+    (data.guests || []).forEach(guest => {
+      const guestCard = document.createElement("div");
+      guestCard.className = "guest-card";
+      const title = document.createElement("strong");
+      title.textContent = guest.name || `Guest ${guest.vmid}`;
+      const details = document.createElement("span");
+      details.textContent = `#${guest.vmid} · ${guest.type || "guest"} · ${formatBytes(guest.mem)}`;
+      guestCard.append(title, statusPill(guest.status), details);
+      grid.appendChild(guestCard);
+    });
+    card.appendChild(grid);
+  } else if (artifact.type === "guest_status" || artifact.type === "node_status") {
+    const heading = document.createElement("div");
+    heading.className = "artifact-heading";
+    heading.textContent = artifact.type === "guest_status"
+      ? `${data.name || `Guest ${data.vmid || ""}`} status`
+      : "Node status";
+    card.appendChild(heading);
+    const metrics = document.createElement("div");
+    metrics.className = "artifact-metrics";
+    if (data.status) metrics.appendChild(metric("State", data.status));
+    if (data.uptime !== undefined) metrics.appendChild(metric("Uptime", formatUptime(data.uptime)));
+    if (data.cpu !== undefined) metrics.appendChild(metric("CPU", `${(Number(data.cpu) * 100).toFixed(2)}%`));
+    if (data.mem !== undefined) metrics.appendChild(metric("Memory", formatBytes(data.mem)));
+    card.appendChild(metrics);
+  } else if (artifact.type === "port_status") {
+    const heading = document.createElement("div");
+    heading.className = "artifact-heading";
+    heading.textContent = `TCP ${data.host}:${data.port}`;
+    card.append(heading, statusPill(data.reachable ? "online" : "unreachable"));
+  } else if (artifact.type === "guest_list") {
+    const heading = document.createElement("div");
+    heading.className = "artifact-heading";
+    heading.textContent = `Guest matches · ${Array.isArray(data) ? data.length : 0}`;
+    card.appendChild(heading);
+  } else if (artifact.type === "task_list") {
+    const heading = document.createElement("div");
+    heading.className = "artifact-heading";
+    heading.textContent = `Recent tasks · ${Array.isArray(data) ? data.length : 0}`;
+    card.appendChild(heading);
+  } else {
+    const heading = document.createElement("div");
+    heading.className = "artifact-heading";
+    heading.textContent = artifact.type.replaceAll("_", " ");
+    const pre = document.createElement("pre");
+    pre.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+    card.append(heading, pre);
+  }
+  return card;
+}
+
+function addMessage(text, kind = "assistant", artifacts = []) {
   const element = document.createElement("div");
   element.className = `message ${kind}`;
   element.textContent = text;
   chat.appendChild(element);
+  artifacts.forEach(artifact => chat.appendChild(renderArtifact(artifact)));
   chat.scrollTop = chat.scrollHeight;
 }
 
@@ -31,7 +140,7 @@ async function loadConversation(id) {
     if (!response.ok) throw new Error(conversation.detail || "Could not load conversation");
     sessionId = id;
     chat.replaceChildren();
-    conversation.messages.forEach(item => addMessage(item.content, item.role));
+    conversation.messages.forEach(item => addMessage(item.content, item.role, item.artifacts || []));
     renderHistory();
   } catch (error) {
     addMessage(error.message, "error");
@@ -125,7 +234,7 @@ form.addEventListener("submit", async event => {
     const body = await response.json();
     if (!response.ok) throw new Error(body.detail || "Request failed");
     sessionId = body.session_id;
-    addMessage(body.message);
+    addMessage(body.message, "assistant", body.artifacts || []);
     if (body.pending_approval) showApproval(body.pending_approval);
     await loadHistory();
   } catch (error) {

@@ -25,11 +25,22 @@ def test_local_setup_saves_only_non_secret_configuration(settings) -> None:
             "proxmox_insecure_tls": False,
             "proxmox_allowed_nodes": ["pve"],
             "proxmox_allowed_guests": [100],
+            "ssh_username": "diagnostic-agent",
+            "ssh_key_file": "C:\\keys\\home-agent",
+            "ssh_hosts": [
+                {
+                    "alias": "minecraft",
+                    "hostname": "192.0.2.10",
+                    "services": ["minecraft"],
+                    "ports": [25565],
+                }
+            ],
         },
     )
     assert response.status_code == 200
     saved = json.loads(settings.config_file.read_text(encoding="utf-8"))
     assert saved["proxmox_allowed_guests"] == [100]
+    assert '"minecraft"' in saved["ssh_hosts_json"]
     assert "proxmox_token_secret" not in saved
 
 

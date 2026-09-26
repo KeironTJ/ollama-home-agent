@@ -8,7 +8,9 @@ from ..core.config import Settings
 from ..core.security import bounded_redacted
 from ..integrations import ExternalServiceError, OllamaClient
 from ..tools import DiagnosticTools, ToolError
+from .artifacts import build_artifact
 from .audit import AuditLog
+from .specialists import SpecialistDefinition
 
 SYSTEM_PROMPT = """You are a cautious local home-server diagnostic assistant.
 Investigate methodically and explain evidence in plain language. Prefer read-only checks.
@@ -28,7 +30,12 @@ class AgentRunner:
         self.tools = tools
         self.audit = audit
 
-    def run(self, user_message: str, session_id: str) -> dict[str, Any]:
+    def run(
+        self,
+        user_message: str,
+        session_id: str,
+        specialist: SpecialistDefinition | None = None,
+    ) -> dict[str, Any]:
         user_message = user_message.strip()
         if not user_message:
             raise ValueError("Message cannot be empty")
@@ -50,7 +57,7 @@ class AgentRunner:
                 reason = "The Proxmox API token ID or secret is missing."
             message = f"{reason} I did not substitute SSH or run any diagnostic tool."
             self.audit.record("assistant_message", session_id=session_id, output_data=message, success=False)
-            return {"message": message, "pending_approval": None}
+            return {"message": message, "pending_approval": None, "artifacts": []}
         target_context = (
             "\nConfigured targets (identifiers only; do not invent others): "
             f"Proxmox nodes={list(self.settings.proxmox_allowed_nodes)}, "
@@ -60,17 +67,38 @@ class AgentRunner:
             "Never substitute SSH for a Proxmox request. If an integration is unavailable, "
             "explain the configuration problem without calling a different integration."
         )
+        specialist_context = ""
+        allowed_tool_names: frozenset[str] | None = None
+        if specialist is not None:
+            specialist_context = (
+                f"\nYou are operating as the {specialist.name}. "
+                f"{specialist.instructions}"
+            )
+            allowed_tool_names = specialist.tool_names
+        schemas = (
+            self.tools.schemas
+            if allowed_tool_names is None
+            else self.tools.schemas_for(allowed_tool_names)
+        )
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_PROMPT + target_context},
+            {
+                "role": "system",
+                "content": SYSTEM_PROMPT + target_context + specialist_context,
+            },
             {"role": "user", "content": user_message},
         ]
         deadline = time.monotonic() + self.settings.request_timeout_seconds
+        artifacts: list[dict[str, Any]] = []
 
         for _ in range(self.settings.max_agent_iterations):
             if time.monotonic() >= deadline:
                 raise ExternalServiceError("Diagnostic agent reached its time limit")
             remaining = max(0.1, deadline - time.monotonic())
-            assistant = self.ollama.chat(messages, self.tools.schemas, timeout_seconds=remaining)
+            assistant = self.ollama.chat(
+                messages,
+                schemas,
+                timeout_seconds=remaining,
+            )
             messages.append(assistant)
             calls = assistant.get("tool_calls") or []
             if not calls:
@@ -79,11 +107,29 @@ class AgentRunner:
                     content = "The model returned no diagnostic response."
                 content = bounded_redacted(content, 10_000)
                 self.audit.record("assistant_message", session_id=session_id, output_data=content, success=True)
-                return {"message": content, "pending_approval": None}
+                return {
+                    "message": content,
+                    "pending_approval": None,
+                    "artifacts": artifacts,
+                }
 
             for call in calls[:4]:
                 function = call.get("function") or {}
                 name = function.get("name", "")
+                if allowed_tool_names is not None and name not in allowed_tool_names:
+                    result = {
+                        "error": (
+                            f"Tool '{name}' is outside the selected specialist's scope"
+                        )
+                    }
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_name": name,
+                            "content": json.dumps(result),
+                        }
+                    )
+                    continue
                 arguments = function.get("arguments", {})
                 if isinstance(arguments, str):
                     try:
@@ -97,6 +143,9 @@ class AgentRunner:
                 except (ToolError, ExternalServiceError, TypeError, ValueError) as exc:
                     result = {"error": str(exc)}
                 pending = result.get("pending_approval") if isinstance(result, dict) else None
+                artifact = build_artifact(name, result)
+                if artifact is not None:
+                    artifacts.append(artifact)
                 messages.append(
                     {
                         "role": "tool",
@@ -107,8 +156,16 @@ class AgentRunner:
                 if pending:
                     message = f"Action requires explicit approval: {pending['description']}"
                     self.audit.record("assistant_message", session_id=session_id, output_data=message, success=True)
-                    return {"message": message, "pending_approval": pending}
+                    return {
+                        "message": message,
+                        "pending_approval": pending,
+                        "artifacts": artifacts,
+                    }
 
         message = "I stopped after reaching the diagnostic tool-iteration limit. No unapproved changes were made."
         self.audit.record("assistant_message", session_id=session_id, output_data=message, success=False)
-        return {"message": message, "pending_approval": None}
+        return {
+            "message": message,
+            "pending_approval": None,
+            "artifacts": artifacts,
+        }

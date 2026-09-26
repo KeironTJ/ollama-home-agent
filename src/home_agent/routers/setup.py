@@ -32,6 +32,18 @@ def get_setup(
         "proxmox_insecure_tls": settings.proxmox_insecure_tls,
         "proxmox_allowed_nodes": list(settings.proxmox_allowed_nodes),
         "proxmox_allowed_guests": list(settings.proxmox_allowed_guests),
+        "ssh_username": settings.ssh_username,
+        "ssh_key_file": str(settings.ssh_key_file or ""),
+        "ssh_hosts": [
+            {
+                "alias": alias,
+                "hostname": target.get("hostname", ""),
+                "services": target.get("services", []),
+                "ports": target.get("ports", []),
+                "ssh_port": target.get("ssh_port", 22),
+            }
+            for alias, target in settings.ssh_hosts.items()
+        ],
         "config_file": str(settings.config_file or ""),
         "restart_available": request.app.state.shutdown_callback is not None,
     }
@@ -57,15 +69,32 @@ def save_setup(
         raise HTTPException(status_code=400, detail="Proxmox node names cannot be empty")
     if any(guest < 1 for guest in body.proxmox_allowed_guests):
         raise HTTPException(status_code=400, detail="Proxmox guest IDs must be positive")
+    aliases = [target.alias for target in body.ssh_hosts]
+    if len(aliases) != len(set(aliases)):
+        raise HTTPException(status_code=400, detail="SSH host aliases must be unique")
     if settings.config_file is None:
         raise HTTPException(status_code=500, detail="Local config file is disabled")
 
     config = body.model_dump()
+    ssh_hosts = config.pop("ssh_hosts")
     config["proxmox_allowed_nodes"] = sorted(
         set(node.strip() for node in body.proxmox_allowed_nodes)
     )
     config["proxmox_allowed_guests"] = sorted(set(body.proxmox_allowed_guests))
     config["proxmox_ca_file"] = body.proxmox_ca_file.strip() or None
+    config["ssh_key_file"] = body.ssh_key_file.strip() or None
+    config["ssh_hosts_json"] = json.dumps(
+        {
+            target["alias"]: {
+                "hostname": target["hostname"].strip(),
+                "services": sorted(set(target["services"])),
+                "ports": sorted(set(target["ports"])),
+                "ssh_port": target["ssh_port"],
+            }
+            for target in ssh_hosts
+        },
+        separators=(",", ":"),
+    )
     path = settings.config_file.expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")

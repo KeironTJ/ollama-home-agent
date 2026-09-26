@@ -38,6 +38,13 @@ class DiagnosticTools:
             for schema in tool_set.schemas
         ]
 
+    def schemas_for(self, allowed_names: frozenset[str]) -> list[dict[str, Any]]:
+        return [
+            schema
+            for schema in self.schemas
+            if schema["function"]["name"] in allowed_names
+        ]
+
     def invoke(
         self,
         name: str,

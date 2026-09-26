@@ -7,7 +7,12 @@ from home_agent.app import create_app
 def test_history_persists_redacted_conversations(tmp_path) -> None:
     history = ChatHistory(tmp_path / "history.sqlite3")
     history.add_message("conversation-1", "user", "Check Minecraft password=secret")
-    history.add_message("conversation-1", "assistant", "The guest is running.")
+    history.add_message(
+        "conversation-1",
+        "assistant",
+        "The guest is running.",
+        [{"type": "guest_status", "data": {"status": "running"}}],
+    )
 
     conversations = history.list_conversations()
     messages = history.get_messages("conversation-1")
@@ -16,6 +21,7 @@ def test_history_persists_redacted_conversations(tmp_path) -> None:
     assert "secret" not in conversations[0]["title"]
     assert "secret" not in messages[0]["content"]
     assert messages[1]["role"] == "assistant"
+    assert messages[1]["artifacts"][0]["type"] == "guest_status"
 
 
 def test_history_bounds_messages_per_conversation(tmp_path) -> None:
@@ -48,9 +54,16 @@ def test_history_api_lists_loads_and_deletes(settings) -> None:
 
 def test_chat_endpoint_persists_both_messages(settings) -> None:
     app = create_app(settings)
-    app.state.services.runner.run = lambda _message, _session_id: {
+    app.state.services.coordinator.run = lambda _message, _session_id: {
         "message": "Guest 104 is running.",
         "pending_approval": None,
+        "artifacts": [
+            {
+                "type": "guest_status",
+                "source": "proxmox_guest_status",
+                "data": {"vmid": 104, "status": "running"},
+            }
+        ],
     }
     client = TestClient(app, client=("127.0.0.1", 50000))
 
@@ -65,3 +78,4 @@ def test_chat_endpoint_persists_both_messages(settings) -> None:
         ("user", "Check Minecraft"),
         ("assistant", "Guest 104 is running."),
     ]
+    assert messages[1]["artifacts"][0]["data"]["vmid"] == 104

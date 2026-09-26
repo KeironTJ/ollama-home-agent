@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from datetime import UTC, datetime
@@ -46,18 +47,44 @@ class ChatHistory:
                     role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
                     content TEXT NOT NULL,
                     created_at TEXT NOT NULL,
+                    artifacts TEXT NOT NULL DEFAULT '[]',
                     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
                 );
                 CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation
                     ON chat_messages(conversation_id, id);
                 """
             )
+            columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(chat_messages)"
+                ).fetchall()
+            }
+            if "artifacts" not in columns:
+                connection.execute(
+                    "ALTER TABLE chat_messages "
+                    "ADD COLUMN artifacts TEXT NOT NULL DEFAULT '[]'"
+                )
 
-    def add_message(self, conversation_id: str, role: str, content: str) -> None:
+    def add_message(
+        self,
+        conversation_id: str,
+        role: str,
+        content: str,
+        artifacts: list[dict[str, Any]] | None = None,
+    ) -> None:
         if role not in {"user", "assistant"}:
             raise ValueError("Chat history role must be user or assistant")
         now = datetime.now(UTC).isoformat()
         safe_content = bounded_redacted(content, self.max_message_chars)
+        artifact_text = bounded_redacted(
+            json.dumps(artifacts or [], separators=(",", ":"), default=str),
+            20_000,
+        )
+        try:
+            json.loads(artifact_text)
+        except json.JSONDecodeError:
+            artifact_text = "[]"
         title = bounded_redacted(content.replace("\n", " ").strip(), 80) or "New conversation"
         with self._lock, self._connect() as connection:
             connection.execute(
@@ -67,9 +94,10 @@ class ChatHistory:
                 (conversation_id, title, now, now),
             )
             connection.execute(
-                """INSERT INTO chat_messages (conversation_id, role, content, created_at)
-                   VALUES (?, ?, ?, ?)""",
-                (conversation_id, role, safe_content, now),
+                """INSERT INTO chat_messages
+                   (conversation_id, role, content, created_at, artifacts)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (conversation_id, role, safe_content, now, artifact_text),
             )
             connection.execute(
                 """DELETE FROM chat_messages
@@ -111,13 +139,21 @@ class ChatHistory:
     def get_messages(self, conversation_id: str) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(
-                """SELECT id, role, content, created_at
+                """SELECT id, role, content, created_at, artifacts
                    FROM chat_messages
                    WHERE conversation_id = ?
                    ORDER BY id""",
                 (conversation_id,),
             ).fetchall()
-        return [dict(row) for row in rows]
+        messages = []
+        for row in rows:
+            message = dict(row)
+            try:
+                message["artifacts"] = json.loads(message["artifacts"])
+            except (json.JSONDecodeError, TypeError):
+                message["artifacts"] = []
+            messages.append(message)
+        return messages
 
     def delete_conversation(self, conversation_id: str) -> bool:
         with self._lock, self._connect() as connection:
