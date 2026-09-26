@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Home Diagnostic Agent</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background:#10141b; color:#e8edf4; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; }
+    main { width:min(900px,94vw); height:min(850px,94vh); display:grid; grid-template-rows:auto 1fr auto; background:#171d27; border:1px solid #303949; border-radius:14px; overflow:hidden; }
+    header { padding:16px 20px; border-bottom:1px solid #303949; display:flex; gap:12px; justify-content:space-between; align-items:center; }
+    h1 { font-size:18px; margin:0; } .meta { color:#9eabc0; font-size:13px; }
+    #warning { background:#5b3510; color:#ffd8a6; padding:10px 20px; display:none; }
+    #chat { overflow:auto; padding:20px; display:flex; flex-direction:column; gap:14px; }
+    .msg { max-width:80%; padding:12px 14px; border-radius:12px; white-space:pre-wrap; line-height:1.4; }
+    .user { align-self:flex-end; background:#2358a5; } .assistant { align-self:flex-start; background:#252d3b; }
+    .error { align-self:flex-start; background:#5a2228; }
+    .approval { border:1px solid #d39a32; background:#302716; padding:14px; border-radius:10px; }
+    .approval button { margin:10px 8px 0 0; }
+    form { padding:14px; border-top:1px solid #303949; display:grid; grid-template-columns:1fr auto auto; gap:8px; }
+    textarea { resize:none; min-height:48px; max-height:140px; background:#0f141c; color:inherit; border:1px solid #3d485b; border-radius:9px; padding:10px; }
+    button { border:0; border-radius:8px; padding:10px 14px; color:white; background:#3169bd; cursor:pointer; }
+    button.secondary { background:#4a5363; } button.danger { background:#a6413c; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+  </style>
+</head>
+<body>
+<main>
+  <div>
+    <header><h1>Home Diagnostic Agent</h1><span class="meta" id="meta">Loading…</span></header>
+    <div id="warning">Warning: Proxmox TLS verification is explicitly disabled. Trust the Proxmox CA instead.</div>
+  </div>
+  <section id="chat">
+    <div class="msg assistant">Describe the problem. I will use only configured, allowlisted diagnostics and will ask before any change.</div>
+  </section>
+  <form id="form">
+    <textarea id="message" maxlength="8000" placeholder="e.g. My Minecraft server stopped working" required></textarea>
+    <button type="button" class="secondary" id="voice" hidden>Record</button>
+    <button type="submit" id="send">Send</button>
+  </form>
+</main>
+<script>
+const chat = document.querySelector("#chat");
+const form = document.querySelector("#form");
+const message = document.querySelector("#message");
+const send = document.querySelector("#send");
+const voice = document.querySelector("#voice");
+let sessionId = crypto.randomUUID();
+let recorder, chunks = [];
+
+function addMessage(text, kind="assistant") {
+  const el = document.createElement("div");
+  el.className = `msg ${kind}`;
+  el.textContent = text;
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+  return el;
+}
+
+function showApproval(approval) {
+  const box = document.createElement("div");
+  box.className = "approval";
+  const text = document.createElement("div");
+  text.textContent = `${approval.description}\nExpires: ${new Date(approval.expires_at).toLocaleString()}`;
+  box.appendChild(text);
+  for (const [label, approved, cls] of [["Approve", true, "danger"], ["Reject", false, "secondary"]]) {
+    const button = document.createElement("button");
+    button.textContent = label; button.className = cls;
+    button.onclick = async () => {
+      box.querySelectorAll("button").forEach(b => b.disabled = true);
+      try {
+        const response = await fetch(`/api/approvals/${approval.id}`, {
+          method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({approved})
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.detail || "Approval failed");
+        addMessage(approved ? `Approved action result:\n${JSON.stringify(body.outcome, null, 2)}` : "Action rejected.");
+        box.remove();
+      } catch (error) { addMessage(error.message, "error"); }
+    };
+    box.appendChild(button);
+  }
+  chat.appendChild(box); chat.scrollTop = chat.scrollHeight;
+}
+
+form.addEventListener("submit", async event => {
+  event.preventDefault();
+  const text = message.value.trim(); if (!text) return;
+  addMessage(text, "user"); message.value = ""; send.disabled = true;
+  try {
+    const response = await fetch("/api/chat", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message:text, session_id:sessionId})
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || "Request failed");
+    sessionId = body.session_id;
+    addMessage(body.message);
+    if (body.pending_approval) showApproval(body.pending_approval);
+  } catch (error) { addMessage(error.message, "error"); }
+  finally { send.disabled = false; message.focus(); }
+});
+
+fetch("/api/config").then(r => r.json()).then(config => {
+  document.querySelector("#meta").textContent = `${config.model} · ${config.proxmox_configured ? "Proxmox configured" : "Proxmox not configured"}`;
+  document.querySelector("#warning").style.display = config.insecure_tls ? "block" : "none";
+  if (config.voice_available && navigator.mediaDevices && window.MediaRecorder) voice.hidden = false;
+});
+
+voice.onclick = async () => {
+  if (recorder && recorder.state === "recording") { recorder.stop(); voice.textContent = "Record"; return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    chunks = []; recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = event => chunks.push(event.data);
+    recorder.onstop = async () => {
+      stream.getTracks().forEach(track => track.stop());
+      const audio = new Blob(chunks, {type:recorder.mimeType});
+      voice.disabled = true;
+      try {
+        const response = await fetch("/api/transcribe", {method:"POST", headers:{"X-Audio-Extension":".webm"}, body:audio});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.detail || "Transcription failed");
+        message.value = body.text; message.focus();
+      } catch (error) { addMessage(error.message, "error"); }
+      finally { voice.disabled = false; }
+    };
+    recorder.start(); voice.textContent = "Stop";
+  } catch (error) { addMessage(`Microphone unavailable: ${error.message}`, "error"); }
+};
+</script>
+</body>
+</html>
