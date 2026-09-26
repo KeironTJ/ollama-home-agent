@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Diagnostics · Home Agent{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', path='/css/chat.css') }}">{% endblock %}
+{% block body_class %}chat-page{% endblock %}
+{% block content %}
+<div class="chat-shell">
+  <aside class="history-panel">
+    <a class="back-link" href="/">← All agents</a>
+    <div class="history-heading"><strong>Conversations</strong></div>
+    <button type="button" class="button" id="new-chat">＋ New conversation</button>
+    <div id="history"></div>
+  </aside>
+  <main class="chat-main">
+    <div>
+      <header class="chat-header">
+        <div><span class="agent-label">Agent</span><h1>Home diagnostics</h1></div>
+        <div class="chat-actions"><span class="meta" id="meta">Loading…</span><a class="button secondary" href="/?setup=1">Configuration</a></div>
+      </header>
+      <div id="warning">Warning: Proxmox TLS verification is explicitly disabled. Trust the Proxmox CA instead.</div>
+    </div>
+    <section id="chat" aria-live="polite">
+      <div class="message assistant">Describe the problem. I will use only configured, allowlisted diagnostics and will ask before any change.</div>
+    </section>
+    <form id="chat-form">
+      <textarea id="message" maxlength="8000" placeholder="e.g. My Minecraft server stopped working" required></textarea>
+      <button type="button" class="button secondary" id="voice" hidden>Record</button>
+      <button type="submit" class="button" id="send">Send</button>
+    </form>
+  </main>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='/js/chat.js') }}" defer></script>{% endblock %}

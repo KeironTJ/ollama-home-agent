@@ -2,8 +2,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from home_agent.approvals import ApprovalError, ApprovalStore
-from home_agent.audit import AuditLog
+from home_agent.services.approvals import ApprovalError, ApprovalStore
+from home_agent.services.audit import AuditLog
 
 
 def test_approval_is_explicit_and_single_use(approvals: ApprovalStore) -> None:
@@ -45,4 +45,3 @@ def test_expired_approval_never_executes(approvals: ApprovalStore, audit: AuditL
     with pytest.raises(ApprovalError, match="expired"):
         approvals.decide(pending.id, True, lambda *_: pytest.fail("must not execute"))
     assert approvals.get(pending.id).status == "expired"
-

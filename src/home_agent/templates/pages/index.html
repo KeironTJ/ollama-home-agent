@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Home Agent{% endblock %}
+{% block styles %}
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/landing.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/setup.css') }}">
+{% endblock %}
+{% block body_class %}landing-page{% endblock %}
+{% block content %}
+<div class="landing-wrap">
+  <header class="landing-header">
+    <a class="brand" href="/"><span class="brand-mark">⌂</span> Home Agent</a>
+    <div class="header-actions">
+      <div class="service-status"><span class="status-dot" id="health-dot"></span><span id="health-text">Checking services…</span></div>
+      <button type="button" class="button secondary" id="open-setup">Configuration</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="eyebrow">Private local operations</div>
+      <h1>Your home infrastructure, understood.</h1>
+      <p>Choose a focused local agent. Models, credentials, diagnostics, approvals, and conversation history stay on this machine and your home network.</p>
+    </section>
+
+    <section aria-labelledby="agents-title">
+      <div class="section-heading">
+        <div><span class="section-kicker">Workspace</span><h2 id="agents-title">Available agents</h2></div>
+        <span class="muted">1 available</span>
+      </div>
+      <div class="agent-grid">
+        <a class="agent-card primary-card" href="/agents/home-diagnostics">
+          <div class="card-icon">⌁</div>
+          <div>
+            <h3>Home diagnostics</h3>
+            <p>Investigate Proxmox nodes, guests, services, resource pressure, logs, and network reachability with approval-gated actions.</p>
+          </div>
+          <span class="card-action">Open agent →</span>
+        </a>
+        <article class="agent-card planned">
+          <div class="card-icon">⌘</div>
+          <div><h3>Automation <span class="pill">Planned</span></h3><p>Coordinate safe maintenance routines and recurring checks across allowlisted infrastructure.</p></div>
+        </article>
+        <article class="agent-card planned">
+          <div class="card-icon">◈</div>
+          <div><h3>Home Assistant <span class="pill">Planned</span></h3><p>Understand device state and troubleshoot local automations through a dedicated integration.</p></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="configuration-summary" aria-labelledby="configuration-title">
+      <div>
+        <span class="section-kicker">Local settings</span>
+        <h2 id="configuration-title">Configuration</h2>
+        <p>Manage model selection, Proxmox connectivity, trusted CA, and diagnostic allowlists from the dashboard.</p>
+      </div>
+      <button type="button" class="button secondary" id="open-setup-card">Open configuration</button>
+    </section>
+  </main>
+
+  <footer class="landing-footer">
+    <span>Local-first · Approval gated · Audited</span>
+    <span id="model">Loading model…</span>
+  </footer>
+</div>
+{% include "components/setup_dialog.html" %}
+{% endblock %}
+{% block scripts %}
+  <script src="{{ url_for('static', path='/js/setup.js') }}" defer></script>
+  <script src="{{ url_for('static', path='/js/landing.js') }}" defer></script>
+{% endblock %}

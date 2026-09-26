@@ -1,0 +1,14 @@
+dialog { width: min(680px, 92vw); max-height: 88vh; overflow: auto; color: inherit; background: #171d27; border: 1px solid #3d485b; border-radius: 14px; padding: 22px; box-shadow: 0 24px 80px #000a; }
+dialog::backdrop { background: #06080dcc; backdrop-filter: blur(3px); }
+.dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+.dialog-heading h2 { margin: 4px 0 0; }
+.icon-button { border: 0; color: #91a1b7; background: transparent; font-size: 25px; cursor: pointer; }
+.setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.setup-grid label { display: flex; flex-direction: column; gap: 5px; color: #bac5d7; font-size: 13px; }
+.setup-grid input:not([type="checkbox"]) { width: 100%; background: #0f141c; color: inherit; border: 1px solid #3d485b; border-radius: 7px; padding: 9px; }
+.setup-grid .wide { grid-column: 1 / -1; }
+.setup-grid .checkbox { flex-direction: row; align-items: center; padding: 6px 0; }
+.setup-note { padding: 10px; background: #202938; border-radius: 8px; color: #bac5d7; font-size: 13px; line-height: 1.45; margin: 12px 0; }
+.setup-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+#setup-status { margin-top: 10px; min-height: 20px; color: #ffd18b; }
+@media (max-width: 600px) { .setup-grid { grid-template-columns: 1fr; } .setup-grid .wide { grid-column: auto; } }

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Transactional approval lifecycle service."""
+
 import json
 import sqlite3
 import threading

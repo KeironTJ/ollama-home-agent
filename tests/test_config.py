@@ -1,4 +1,4 @@
-from home_agent.config import Settings
+from home_agent.core.config import Settings
 
 
 def test_csv_allowlists_parse_from_environment(monkeypatch) -> None:

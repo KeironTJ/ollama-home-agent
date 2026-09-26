@@ -1,5 +1,5 @@
-from home_agent.audit import AuditLog
-from home_agent.security import bounded_redacted, redact_secrets
+from home_agent.core.security import bounded_redacted, redact_secrets
+from home_agent.services.audit import AuditLog
 
 
 def test_redacts_proxmox_and_common_secrets() -> None:

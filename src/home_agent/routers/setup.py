@@ -1,0 +1,108 @@
+from __future__ import annotations
+
+import json
+import threading
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from ..dependencies import Services, require_local_request, require_setup_token
+from ..schemas import SetupConfig
+
+router = APIRouter(prefix="/api", tags=["setup"])
+LocalRequest = Annotated[None, Depends(require_local_request)]
+AuthorizedSetup = Annotated[None, Depends(require_setup_token)]
+
+
+@router.get("/setup")
+def get_setup(
+    request: Request,
+    services: Services,
+    _local: LocalRequest,
+) -> dict[str, Any]:
+    settings = services.settings
+    return {
+        "setup_token": request.app.state.setup_token,
+        "ollama_url": settings.ollama_url,
+        "ollama_model": settings.ollama_model,
+        "proxmox_url": settings.proxmox_url,
+        "proxmox_token_id": settings.proxmox_token_id,
+        "proxmox_token_secret_configured": bool(settings.proxmox_token_secret),
+        "proxmox_ca_file": str(settings.proxmox_ca_file or ""),
+        "proxmox_insecure_tls": settings.proxmox_insecure_tls,
+        "proxmox_allowed_nodes": list(settings.proxmox_allowed_nodes),
+        "proxmox_allowed_guests": list(settings.proxmox_allowed_guests),
+        "config_file": str(settings.config_file or ""),
+        "restart_available": request.app.state.shutdown_callback is not None,
+    }
+
+
+@router.put("/setup")
+def save_setup(
+    body: SetupConfig,
+    services: Services,
+    _authorized: AuthorizedSetup,
+) -> dict[str, Any]:
+    settings = services.settings
+    if not body.proxmox_url.lower().startswith("https://"):
+        raise HTTPException(status_code=400, detail="Proxmox URL must use HTTPS")
+    if body.proxmox_token_id and "!" not in body.proxmox_token_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Proxmox API token ID must include '!token-name', for example user@pve!diagnostic",
+        )
+    if not body.ollama_url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Ollama URL must use HTTP or HTTPS")
+    if any(not node.strip() for node in body.proxmox_allowed_nodes):
+        raise HTTPException(status_code=400, detail="Proxmox node names cannot be empty")
+    if any(guest < 1 for guest in body.proxmox_allowed_guests):
+        raise HTTPException(status_code=400, detail="Proxmox guest IDs must be positive")
+    if settings.config_file is None:
+        raise HTTPException(status_code=500, detail="Local config file is disabled")
+
+    config = body.model_dump()
+    config["proxmox_allowed_nodes"] = sorted(
+        set(node.strip() for node in body.proxmox_allowed_nodes)
+    )
+    config["proxmox_allowed_guests"] = sorted(set(body.proxmox_allowed_guests))
+    config["proxmox_ca_file"] = body.proxmox_ca_file.strip() or None
+    path = settings.config_file.expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+    services.audit.record(
+        "configuration_updated",
+        input_data={
+            **config,
+            "proxmox_token_secret_configured": bool(settings.proxmox_token_secret),
+        },
+        output_data={"restart_required": True},
+        success=True,
+    )
+    return {
+        "saved": True,
+        "restart_required": True,
+        "config_file": str(path),
+        "message": "Configuration saved. Restart the app to apply it.",
+    }
+
+
+@router.post("/restart")
+def restart(
+    request: Request,
+    services: Services,
+    _authorized: AuthorizedSetup,
+) -> dict[str, Any]:
+    shutdown_callback = request.app.state.shutdown_callback
+    if shutdown_callback is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Restart is available only when launched with: python -m home_agent",
+        )
+    request.app.state.restart_requested = True
+    services.audit.record("application_restart_requested", success=True)
+    timer = threading.Timer(0.75, shutdown_callback)
+    timer.daemon = True
+    timer.start()
+    return {"restarting": True, "message": "The application is restarting."}

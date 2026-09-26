@@ -1,0 +1,25 @@
+<dialog id="setup-dialog">
+  <div class="dialog-heading">
+    <div><span class="section-kicker">Local settings</span><h2>Configuration</h2></div>
+    <button type="button" class="icon-button" id="close-setup" aria-label="Close">×</button>
+  </div>
+  <div class="setup-note">Non-secret settings are stored in <code>home-agent.config.json</code>. Keep the Proxmox token secret in the untracked <code>.env</code> file.</div>
+  <form id="setup-form">
+    <div class="setup-grid">
+      <label>Ollama URL<input id="setup-ollama-url" required></label>
+      <label>Ollama model<input id="setup-ollama-model" required></label>
+      <label class="wide">Proxmox HTTPS URL<input id="setup-proxmox-url" required></label>
+      <label class="wide">Proxmox token ID<input id="setup-token-id" placeholder="home-agent@pve!diagnostic"></label>
+      <label class="wide">Proxmox CA certificate path<input id="setup-ca-file" placeholder="C:\Users\you\.config\home-agent\pve-root-ca.pem"></label>
+      <label>Allowed node names<input id="setup-nodes" placeholder="proxmox"></label>
+      <label>Allowed guest IDs<input id="setup-guests" placeholder="100,101"></label>
+      <label class="wide checkbox"><input type="checkbox" id="setup-insecure"><span>Disable Proxmox TLS verification <strong>(unsafe)</strong></span></label>
+    </div>
+    <div class="setup-note" id="secret-status"></div>
+    <div id="setup-status" role="status"></div>
+    <div class="setup-buttons">
+      <button type="button" class="button secondary" id="restart-app">Restart application</button>
+      <button type="submit" class="button">Save configuration</button>
+    </div>
+  </form>
+</dialog>

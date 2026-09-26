@@ -4,11 +4,11 @@ import json
 import time
 from typing import Any
 
+from ..core.config import Settings
+from ..core.security import bounded_redacted
+from ..integrations import ExternalServiceError, OllamaClient
+from ..tools import DiagnosticTools, ToolError
 from .audit import AuditLog
-from .clients import ExternalServiceError, OllamaClient
-from .config import Settings
-from .security import bounded_redacted
-from .tools import DiagnosticTools, ToolError
 
 SYSTEM_PROMPT = """You are a cautious local home-server diagnostic assistant.
 Investigate methodically and explain evidence in plain language. Prefer read-only checks.
@@ -35,8 +35,33 @@ class AgentRunner:
         if len(user_message) > 8_000:
             raise ValueError("Message is too long (maximum 8,000 characters)")
         self.audit.record("user_message", session_id=session_id, input_data=user_message, success=True)
+        lower_message = user_message.lower()
+        proxmox_requested = any(
+            term in lower_message
+            for term in ("proxmox", " pve", "vm status", "lxc", "guest status")
+        )
+        if proxmox_requested and not self.tools.proxmox.configured:
+            if self.settings.proxmox_token_id and "!" not in self.settings.proxmox_token_id:
+                reason = (
+                    "The Proxmox token ID is incomplete. Set it to the full "
+                    "'user@realm!token-name' identity in Setup."
+                )
+            else:
+                reason = "The Proxmox API token ID or secret is missing."
+            message = f"{reason} I did not substitute SSH or run any diagnostic tool."
+            self.audit.record("assistant_message", session_id=session_id, output_data=message, success=False)
+            return {"message": message, "pending_approval": None}
+        target_context = (
+            "\nConfigured targets (identifiers only; do not invent others): "
+            f"Proxmox nodes={list(self.settings.proxmox_allowed_nodes)}, "
+            f"guest IDs={list(self.settings.proxmox_allowed_guests)}, "
+            f"SSH host aliases={list(self.settings.ssh_hosts)}. "
+            f"Proxmox integration available={self.tools.proxmox.configured}. "
+            "Never substitute SSH for a Proxmox request. If an integration is unavailable, "
+            "explain the configuration problem without calling a different integration."
+        )
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": SYSTEM_PROMPT + target_context},
             {"role": "user", "content": user_message},
         ]
         deadline = time.monotonic() + self.settings.request_timeout_seconds

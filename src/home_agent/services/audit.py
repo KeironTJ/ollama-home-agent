@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .security import bounded_redacted
+from ..core.security import bounded_redacted
 
 
 class AuditLog:
@@ -75,4 +75,3 @@ class AuditLog:
     @staticmethod
     def encode(value: Any) -> str:
         return json.dumps(value, separators=(",", ":"), sort_keys=True)
-

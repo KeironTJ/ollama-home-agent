@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Secret redaction and bounded text helpers."""
+
 import re
 from typing import Any
 
@@ -24,4 +26,3 @@ def bounded_redacted(value: Any, limit: int) -> str:
     if len(text) <= limit:
         return text
     return f"{text[:limit]}\n...[truncated {len(text) - limit} characters]"
-

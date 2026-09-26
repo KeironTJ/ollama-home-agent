@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Typed application configuration."""
+
 import json
 import os
 from pathlib import Path
@@ -20,7 +22,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8080
     data_dir: Path = Path("./data")
-    config_file: Path | None = None
+    config_file: Path | None = Path("./home-agent.config.json")
 
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.1:8b"
@@ -80,6 +82,8 @@ class Settings(BaseSettings):
         if not bootstrap.config_file:
             return bootstrap
         path = bootstrap.config_file.expanduser()
+        if not path.exists():
+            return bootstrap
         try:
             values = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
