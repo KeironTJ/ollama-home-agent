@@ -16,6 +16,18 @@
       <label class="wide checkbox"><input type="checkbox" id="setup-insecure"><span>Disable Proxmox TLS verification <strong>(unsafe)</strong></span></label>
     </div>
     <div class="setup-section-heading">
+      <div><span class="section-kicker">Minecraft control</span><h3>Crafty Controller 4</h3></div>
+    </div>
+    <div class="setup-grid">
+      <label class="wide">Crafty HTTPS URL<input id="setup-crafty-url" placeholder="https://192.168.1.240:8443"></label>
+      <label class="wide">Crafty CA certificate path<input id="setup-crafty-ca-file" placeholder="C:\path\to\crafty-ca.pem"></label>
+      <label class="wide">Allowed Crafty server IDs<input id="setup-crafty-servers" placeholder="server-uuid-1,server-uuid-2"></label>
+      <label class="wide checkbox"><input type="checkbox" id="setup-crafty-insecure"><span>Disable Crafty TLS verification <strong>(unsafe)</strong></span></label>
+    </div>
+    <button type="button" class="button secondary" id="discover-crafty">Discover token-visible servers</button>
+    <div id="crafty-discovery" class="discovery-results"></div>
+    <div class="setup-note" id="crafty-token-status"></div>
+    <div class="setup-section-heading">
       <div><span class="section-kicker">Optional diagnostics</span><h3>Restricted SSH hosts</h3></div>
       <button type="button" class="button secondary" id="add-ssh-host">Add host</button>
     </div>

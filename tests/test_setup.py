@@ -12,6 +12,8 @@ def test_local_setup_saves_only_non_secret_configuration(settings) -> None:
     setup = client.get("/api/setup")
     assert setup.status_code == 200
     assert "proxmox_token_secret" not in setup.json()
+    assert "crafty_read_token" not in setup.json()
+    assert "crafty_action_token" not in setup.json()
 
     response = client.put(
         "/api/setup",
@@ -25,6 +27,10 @@ def test_local_setup_saves_only_non_secret_configuration(settings) -> None:
             "proxmox_insecure_tls": False,
             "proxmox_allowed_nodes": ["pve"],
             "proxmox_allowed_guests": [100],
+            "crafty_url": "https://192.0.2.20:8443",
+            "crafty_ca_file": "C:\\certs\\crafty.pem",
+            "crafty_insecure_tls": False,
+            "crafty_allowed_servers": [" server-two ", "server-one", "server-one"],
             "ssh_username": "diagnostic-agent",
             "ssh_key_file": "C:\\keys\\home-agent",
             "ssh_hosts": [
@@ -40,6 +46,7 @@ def test_local_setup_saves_only_non_secret_configuration(settings) -> None:
     assert response.status_code == 200
     saved = json.loads(settings.config_file.read_text(encoding="utf-8"))
     assert saved["proxmox_allowed_guests"] == [100]
+    assert saved["crafty_allowed_servers"] == ["server-one", "server-two"]
     assert '"minecraft"' in saved["ssh_hosts_json"]
     assert "proxmox_token_secret" not in saved
 
@@ -92,3 +99,28 @@ def test_local_restart_requires_token_and_requests_graceful_shutdown(settings) -
     assert response.status_code == 200
     assert app.state.restart_requested is True
     timer.start.assert_called_once()
+
+
+def test_crafty_discovery_returns_only_identifiers(settings) -> None:
+    app = create_app(settings)
+    app.state.services.crafty.request = Mock(
+        return_value=[
+            {
+                "server_id": "server-one",
+                "server_name": "Survival",
+                "path": "/secret/server/path",
+            }
+        ]
+    )
+    client = TestClient(app, client=("127.0.0.1", 50000))
+    setup_token = client.get("/api/setup").json()["setup_token"]
+
+    response = client.post(
+        "/api/setup/discover/crafty",
+        headers={"X-Home-Agent-Setup-Token": setup_token},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "servers": [{"id": "server-one", "name": "Survival"}]
+    }

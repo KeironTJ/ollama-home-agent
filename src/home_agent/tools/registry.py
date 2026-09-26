@@ -4,10 +4,11 @@ from typing import Any, Callable
 
 from ..core.config import Settings
 from ..core.security import bounded_redacted
-from ..integrations import ExternalServiceError, ProxmoxClient
+from ..integrations import CraftyClient, ExternalServiceError, ProxmoxClient
 from ..services.approvals import ApprovalStore
 from ..services.audit import AuditLog
 from .base import ToolError
+from .crafty import CraftyToolSet
 from .proxmox import ProxmoxToolSet
 from .ssh import SshToolSet
 
@@ -19,13 +20,20 @@ class DiagnosticTools:
         proxmox: ProxmoxClient,
         approvals: ApprovalStore,
         audit: AuditLog,
+        crafty: CraftyClient | None = None,
     ):
         self.settings = settings
         self.proxmox = proxmox
+        self.crafty = crafty or CraftyClient(settings)
         self.audit = audit
         self.proxmox_tools = ProxmoxToolSet(settings, proxmox, approvals)
+        self.crafty_tools = CraftyToolSet(settings, self.crafty, approvals)
         self.ssh_tools = SshToolSet(settings, approvals)
-        self._tool_sets = (self.proxmox_tools, self.ssh_tools)
+        self._tool_sets = (
+            self.proxmox_tools,
+            self.crafty_tools,
+            self.ssh_tools,
+        )
         self._functions: dict[str, Callable[..., Any]] = {}
         for tool_set in self._tool_sets:
             self._functions.update(tool_set.handlers)

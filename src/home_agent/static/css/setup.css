@@ -16,6 +16,8 @@ dialog::backdrop { background: #06080dcc; backdrop-filter: blur(3px); }
 .ssh-host-row label { display: flex; flex-direction: column; gap: 4px; color: #9eacc0; font-size: 11px; }
 .ssh-host-row input { min-width: 0; width: 100%; background: #0f141c; color: inherit; border: 1px solid #3d485b; border-radius: 7px; padding: 8px; }
 .ssh-host-remove { padding: 8px 10px; background: #4d292d; }
+.discovery-results { display: grid; gap: 6px; margin-top: 8px; }
+.discovery-result { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; background: #202938; color: #b9c7da; font-size: 12px; }
 #setup-status { margin-top: 10px; min-height: 20px; color: #ffd18b; }
 @media (max-width: 760px) { .ssh-host-row { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 600px) { .setup-grid, .ssh-host-row { grid-template-columns: 1fr; } .setup-grid .wide { grid-column: auto; } }

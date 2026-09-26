@@ -7,6 +7,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..dependencies import Services, require_local_request, require_setup_token
+from ..integrations import ExternalServiceError
 from ..schemas import SetupConfig
 
 router = APIRouter(prefix="/api", tags=["setup"])
@@ -32,6 +33,12 @@ def get_setup(
         "proxmox_insecure_tls": settings.proxmox_insecure_tls,
         "proxmox_allowed_nodes": list(settings.proxmox_allowed_nodes),
         "proxmox_allowed_guests": list(settings.proxmox_allowed_guests),
+        "crafty_url": settings.crafty_url,
+        "crafty_ca_file": str(settings.crafty_ca_file or ""),
+        "crafty_insecure_tls": settings.crafty_insecure_tls,
+        "crafty_allowed_servers": list(settings.crafty_allowed_servers),
+        "crafty_read_token_configured": bool(settings.crafty_read_token),
+        "crafty_action_token_configured": bool(settings.crafty_action_token),
         "ssh_username": settings.ssh_username,
         "ssh_key_file": str(settings.ssh_key_file or ""),
         "ssh_hosts": [
@@ -65,6 +72,8 @@ def save_setup(
         )
     if not body.ollama_url.lower().startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Ollama URL must use HTTP or HTTPS")
+    if body.crafty_url and not body.crafty_url.lower().startswith("https://"):
+        raise HTTPException(status_code=400, detail="Crafty Controller URL must use HTTPS")
     if any(not node.strip() for node in body.proxmox_allowed_nodes):
         raise HTTPException(status_code=400, detail="Proxmox node names cannot be empty")
     if any(guest < 1 for guest in body.proxmox_allowed_guests):
@@ -82,6 +91,14 @@ def save_setup(
     )
     config["proxmox_allowed_guests"] = sorted(set(body.proxmox_allowed_guests))
     config["proxmox_ca_file"] = body.proxmox_ca_file.strip() or None
+    config["crafty_ca_file"] = body.crafty_ca_file.strip() or None
+    config["crafty_allowed_servers"] = sorted(
+        set(
+            server_id.strip()
+            for server_id in body.crafty_allowed_servers
+            if server_id.strip()
+        )
+    )
     config["ssh_key_file"] = body.ssh_key_file.strip() or None
     config["ssh_hosts_json"] = json.dumps(
         {
@@ -135,3 +152,39 @@ def restart(
     timer.daemon = True
     timer.start()
     return {"restarting": True, "message": "The application is restarting."}
+
+
+@router.post("/setup/discover/crafty")
+def discover_crafty_servers(
+    services: Services,
+    _authorized: AuthorizedSetup,
+) -> dict[str, Any]:
+    try:
+        data = services.crafty.request("GET", "servers") or []
+    except ExternalServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if isinstance(data, dict):
+        data = data.get("servers", [])
+    if not isinstance(data, list):
+        raise HTTPException(
+            status_code=502,
+            detail="Crafty returned an unexpected server-list shape",
+        )
+    servers = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        server_id = str(
+            item.get("server_id")
+            or item.get("server_uuid")
+            or item.get("id")
+            or ""
+        )
+        if server_id:
+            servers.append(
+                {
+                    "id": server_id,
+                    "name": item.get("server_name") or item.get("name") or server_id,
+                }
+            )
+    return {"servers": servers}

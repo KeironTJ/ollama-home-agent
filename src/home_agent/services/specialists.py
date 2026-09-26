@@ -33,6 +33,14 @@ SSH_TOOLS = frozenset(
         "request_restart_service",
     }
 )
+CRAFTY_TOOLS = frozenset(
+    {
+        "crafty_list_servers",
+        "crafty_server_stats",
+        "crafty_server_logs",
+        "request_crafty_action",
+    }
+)
 
 
 class SpecialistRegistry:
@@ -47,7 +55,7 @@ class SpecialistRegistry:
                     "then TCP reachability, service state, resources, and bounded logs. "
                     "Do not conclude that Minecraft is healthy merely because its guest runs."
                 ),
-                tool_names=PROXMOX_TOOLS | SSH_TOOLS,
+                tool_names=PROXMOX_TOOLS | CRAFTY_TOOLS | SSH_TOOLS,
                 keywords=(
                     "minecraft",
                     "25565",
@@ -102,7 +110,7 @@ class SpecialistRegistry:
                     "Triage the request with the least invasive available diagnostic "
                     "tools and clearly state any missing integration."
                 ),
-                tool_names=PROXMOX_TOOLS | SSH_TOOLS,
+                tool_names=PROXMOX_TOOLS | CRAFTY_TOOLS | SSH_TOOLS,
                 keywords=(),
             ),
         )

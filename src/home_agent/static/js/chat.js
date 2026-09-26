@@ -76,6 +76,44 @@ function renderArtifact(artifact) {
       grid.appendChild(guestCard);
     });
     card.appendChild(grid);
+  } else if (artifact.type === "minecraft_servers") {
+    const heading = document.createElement("div");
+    heading.className = "artifact-heading";
+    heading.textContent = `Crafty servers · ${Array.isArray(data) ? data.length : 0}`;
+    card.appendChild(heading);
+    const grid = document.createElement("div");
+    grid.className = "guest-grid";
+    (Array.isArray(data) ? data : []).forEach(server => {
+      const serverCard = document.createElement("div");
+      serverCard.className = "guest-card";
+      const title = document.createElement("strong");
+      title.textContent = server.server_name || server.name || "Minecraft server";
+      const id = document.createElement("span");
+      id.textContent = server.server_id || server.server_uuid || server.id || "Unknown ID";
+      serverCard.append(title, id);
+      grid.appendChild(serverCard);
+    });
+    card.appendChild(grid);
+  } else if (artifact.type === "minecraft_status") {
+    const heading = document.createElement("div");
+    heading.className = "artifact-heading";
+    heading.textContent = data.server_name || "Minecraft server status";
+    card.appendChild(heading);
+    const metrics = document.createElement("div");
+    metrics.className = "artifact-metrics";
+    metrics.appendChild(metric("State", data.running ? "running" : "stopped"));
+    if (data.online !== undefined) metrics.appendChild(metric("Players", `${data.online}/${data.max ?? "—"}`));
+    if (data.cpu !== undefined) metrics.appendChild(metric("CPU", `${Number(data.cpu).toFixed(2)}%`));
+    if (data.mem !== undefined) metrics.appendChild(metric("Memory", formatBytes(data.mem)));
+    if (data.version) metrics.appendChild(metric("Version", String(data.version)));
+    card.appendChild(metrics);
+  } else if (artifact.type === "minecraft_logs") {
+    const heading = document.createElement("div");
+    heading.className = "artifact-heading";
+    heading.textContent = "Recent Crafty logs";
+    const pre = document.createElement("pre");
+    pre.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+    card.append(heading, pre);
   } else if (artifact.type === "guest_status" || artifact.type === "node_status") {
     const heading = document.createElement("div");
     heading.className = "artifact-heading";
@@ -249,7 +287,14 @@ document.querySelector("#new-chat").addEventListener("click", startNewConversati
 fetch("/api/config").then(response => response.json()).then(config => {
   document.querySelector("#meta").textContent =
     `${config.model} · ${config.proxmox_configured ? "Proxmox connected" : "Setup required"}`;
-  document.querySelector("#warning").style.display = config.insecure_tls ? "block" : "none";
+  const warning = document.querySelector("#warning");
+  const insecureServices = [];
+  if (config.proxmox_insecure_tls) insecureServices.push("Proxmox");
+  if (config.crafty_insecure_tls) insecureServices.push("Crafty");
+  warning.textContent = insecureServices.length
+    ? `Warning: TLS verification is explicitly disabled for ${insecureServices.join(" and ")}. Trust the service CA instead.`
+    : "";
+  warning.style.display = insecureServices.length ? "block" : "none";
   if (config.voice_available && navigator.mediaDevices && window.MediaRecorder) voice.hidden = false;
 });
 loadHistory();

@@ -25,10 +25,12 @@ src/home_agent/
 │   ├── audit.py       # security audit persistence
 │   └── history.py     # bounded conversation persistence
 ├── integrations/
+│   ├── crafty.py      # Crafty Controller v2 API client
 │   ├── ollama.py      # local model API client
 │   ├── proxmox.py     # TLS-verified Proxmox API client
 │   └── errors.py      # safe integration errors
 ├── tools/
+│   ├── crafty.py      # Minecraft/Crafty schemas and operations
 │   ├── registry.py    # common invocation, audit, and dispatch facade
 │   ├── proxmox.py     # Proxmox schemas and allowlisted operations
 │   ├── ssh.py         # restricted SSH schemas and operations
@@ -155,6 +157,19 @@ diagnostic-agent ALL=(root) NOPASSWD: /usr/bin/systemctl restart minecraft
 Do not grant a shell wildcard or unrestricted `sudo`. The application validates service names and membership in the per-host allowlist before constructing this fixed command.
 
 Configuration can also come from a JSON object by setting `HOME_AGENT_CONFIG_FILE`; environment variables override defaults, while values explicitly loaded from that file provide local configuration. Never commit `.env`, private keys, tokens, or CA private material.
+
+## Optional Crafty Controller integration
+
+Crafty Controller 4 exposes an official HTTPS API under `/api/v2`. Configure its URL, CA certificate, and allowed server IDs on the dashboard. Keep API keys in `.env`:
+
+```dotenv
+HOME_AGENT_CRAFTY_READ_TOKEN=
+HOME_AGENT_CRAFTY_ACTION_TOKEN=
+```
+
+Use two dedicated, non-full-access Crafty API keys. The read key should be scoped only to the two managed servers with terminal/log visibility and no Crafty-wide user, role, or server-creation permissions. The separate action key may add only the per-server Commands permission and is loaded only for an already-approved start, stop, or restart. The application never exposes Crafty stdin, file management, kill, executable update, user management, or role management.
+
+Crafty uses HTTPS port `8443` by default and commonly starts with a self-signed certificate. Trust/export that certificate through `HOME_AGENT_CRAFTY_CA_FILE`; keep `HOME_AGENT_CRAFTY_INSECURE_TLS=false`. After saving and restarting, **Discover token-visible servers** can populate the allowlist from the authenticated API without exposing server paths or credentials.
 
 ## Optional local voice input
 

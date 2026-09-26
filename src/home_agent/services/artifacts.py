@@ -15,6 +15,9 @@ def build_artifact(tool_name: str, result: Any) -> dict[str, Any] | None:
         "tcp_port_check": "port_status",
         "ssh_service_status": "service_status",
         "ssh_system_resources": "system_resources",
+        "crafty_list_servers": "minecraft_servers",
+        "crafty_server_stats": "minecraft_status",
+        "crafty_server_logs": "minecraft_logs",
     }
     artifact_type = artifact_types.get(tool_name)
     if artifact_type is None:

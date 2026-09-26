@@ -32,6 +32,10 @@ class SetupConfig(BaseModel):
     proxmox_insecure_tls: bool = False
     proxmox_allowed_nodes: list[str] = Field(default_factory=list, max_length=100)
     proxmox_allowed_guests: list[int] = Field(default_factory=list, max_length=1_000)
+    crafty_url: str = Field(default="", max_length=500)
+    crafty_ca_file: str = Field(default="", max_length=1_000)
+    crafty_insecure_tls: bool = False
+    crafty_allowed_servers: list[str] = Field(default_factory=list, max_length=100)
     ssh_username: str = Field(default="diagnostic-agent", min_length=1, max_length=100)
     ssh_key_file: str = Field(default="", max_length=1_000)
     ssh_hosts: list[SshHostConfig] = Field(default_factory=list, max_length=100)

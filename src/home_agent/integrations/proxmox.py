@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import ssl
 from typing import Any
 
 import httpx
 
 from ..core.config import Settings
+from ..core.tls import verified_ssl_context
 from .errors import ExternalServiceError
 
 
@@ -20,17 +20,6 @@ class ProxmoxClient:
             and "!" in self.settings.proxmox_token_id
             and self.settings.proxmox_token_secret
         )
-
-    def _verify(self) -> bool | ssl.SSLContext:
-        if self.settings.proxmox_insecure_tls:
-            return False
-        if self.settings.proxmox_ca_file:
-            context = ssl.create_default_context(cafile=str(self.settings.proxmox_ca_file))
-            strict = getattr(ssl, "VERIFY_X509_STRICT", 0)
-            if strict:
-                context.verify_flags &= ~strict
-            return context
-        return True
 
     def request(self, method: str, path: str, **kwargs: Any) -> Any:
         if self.settings.proxmox_token_id and "!" not in self.settings.proxmox_token_id:
@@ -49,7 +38,10 @@ class ProxmoxClient:
         url = f"{self.settings.proxmox_url.rstrip('/')}/api2/json/{path.lstrip('/')}"
         try:
             with httpx.Client(
-                verify=self._verify(),
+                verify=verified_ssl_context(
+                    self.settings.proxmox_ca_file,
+                    self.settings.proxmox_insecure_tls,
+                ),
                 timeout=self.settings.request_timeout_seconds,
             ) as client:
                 response = client.request(method, url, headers=headers, **kwargs)

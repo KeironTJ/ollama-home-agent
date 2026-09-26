@@ -32,6 +32,44 @@ function addSshHostRow(host = {}) {
 }
 
 document.querySelector("#add-ssh-host").addEventListener("click", () => addSshHostRow());
+document.querySelector("#discover-crafty").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  const results = document.querySelector("#crafty-discovery");
+  button.disabled = true;
+  results.textContent = "Checking the saved Crafty configuration…";
+  try {
+    const response = await fetch("/api/setup/discover/crafty", {
+      method: "POST",
+      headers: {"X-Home-Agent-Setup-Token": setupToken},
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || "Crafty discovery failed");
+    results.replaceChildren();
+    body.servers.forEach(server => {
+      const row = document.createElement("div");
+      row.className = "discovery-result";
+      const label = document.createElement("span");
+      label.textContent = `${server.name} · ${server.id}`;
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "button secondary";
+      add.textContent = "Allow";
+      add.addEventListener("click", () => {
+        const input = document.querySelector("#setup-crafty-servers");
+        const ids = input.value.split(",").map(value => value.trim()).filter(Boolean);
+        if (!ids.includes(server.id)) ids.push(server.id);
+        input.value = ids.join(",");
+      });
+      row.append(label, add);
+      results.appendChild(row);
+    });
+    if (!body.servers.length) results.textContent = "The token can see no Crafty servers.";
+  } catch (error) {
+    results.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 async function openSetup() {
   setupStatus.textContent = "Loading…";
@@ -49,6 +87,14 @@ async function openSetup() {
     document.querySelector("#setup-nodes").value = config.proxmox_allowed_nodes.join(",");
     document.querySelector("#setup-guests").value = config.proxmox_allowed_guests.join(",");
     document.querySelector("#setup-insecure").checked = config.proxmox_insecure_tls;
+    document.querySelector("#setup-crafty-url").value = config.crafty_url;
+    document.querySelector("#setup-crafty-ca-file").value = config.crafty_ca_file;
+    document.querySelector("#setup-crafty-servers").value = config.crafty_allowed_servers.join(",");
+    document.querySelector("#setup-crafty-insecure").checked = config.crafty_insecure_tls;
+    document.querySelector("#crafty-token-status").textContent =
+      `Crafty read token: ${config.crafty_read_token_configured ? "configured" : "missing"} · ` +
+      `action token: ${config.crafty_action_token_configured ? "configured" : "missing"}. ` +
+      "Token values remain environment-only.";
     document.querySelector("#setup-ssh-username").value = config.ssh_username;
     document.querySelector("#setup-ssh-key-file").value = config.ssh_key_file;
     document.querySelector("#ssh-hosts").replaceChildren();
@@ -105,6 +151,8 @@ document.querySelector("#setup-form").addEventListener("submit", async event => 
   event.preventDefault();
   const insecure = document.querySelector("#setup-insecure").checked;
   if (insecure && !confirm("Disable TLS verification? This permits network interception.")) return;
+  const craftyInsecure = document.querySelector("#setup-crafty-insecure").checked;
+  if (craftyInsecure && !confirm("Disable Crafty TLS verification? This permits network interception.")) return;
   const nodes = document.querySelector("#setup-nodes").value.split(",").map(value => value.trim()).filter(Boolean);
   const guests = document.querySelector("#setup-guests").value.split(",").map(value => value.trim()).filter(Boolean).map(Number);
   if (guests.some(value => !Number.isInteger(value) || value < 1)) {
@@ -120,6 +168,10 @@ document.querySelector("#setup-form").addEventListener("submit", async event => 
     proxmox_insecure_tls: insecure,
     proxmox_allowed_nodes: nodes,
     proxmox_allowed_guests: guests,
+    crafty_url: document.querySelector("#setup-crafty-url").value.trim(),
+    crafty_ca_file: document.querySelector("#setup-crafty-ca-file").value.trim(),
+    crafty_insecure_tls: craftyInsecure,
+    crafty_allowed_servers: document.querySelector("#setup-crafty-servers").value.split(",").map(value => value.trim()).filter(Boolean),
     ssh_username: document.querySelector("#setup-ssh-username").value.trim(),
     ssh_key_file: document.querySelector("#setup-ssh-key-file").value.trim(),
     ssh_hosts: Array.from(document.querySelectorAll(".ssh-host-row")).map(row => ({

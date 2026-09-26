@@ -64,6 +64,8 @@ class AgentRunner:
             f"guest IDs={list(self.settings.proxmox_allowed_guests)}, "
             f"SSH host aliases={list(self.settings.ssh_hosts)}. "
             f"Proxmox integration available={self.tools.proxmox.configured}. "
+            f"Crafty integration available={self.tools.crafty.configured}; "
+            f"Crafty server IDs={list(self.settings.crafty_allowed_servers)}. "
             "Never substitute SSH for a Proxmox request. If an integration is unavailable, "
             "explain the configuration problem without calling a different integration."
         )

@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     proxmox_allowed_nodes: Annotated[tuple[str, ...], NoDecode] = ()
     proxmox_allowed_guests: Annotated[tuple[int, ...], NoDecode] = ()
 
+    crafty_url: str = ""
+    crafty_read_token: str = ""
+    crafty_action_token: str = ""
+    crafty_ca_file: Path | None = None
+    crafty_insecure_tls: bool = False
+    crafty_allowed_servers: Annotated[tuple[str, ...], NoDecode] = ()
+
     ssh_username: str = "diagnostic-agent"
     ssh_key_file: Path | None = None
     ssh_hosts_json: str = "{}"
@@ -60,6 +67,13 @@ class Settings(BaseSettings):
     def parse_guests(cls, value: Any) -> Any:
         if isinstance(value, str):
             return tuple(int(item.strip()) for item in value.split(",") if item.strip())
+        return value
+
+    @field_validator("crafty_allowed_servers", mode="before")
+    @classmethod
+    def parse_crafty_servers(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return tuple(item.strip() for item in value.split(",") if item.strip())
         return value
 
     @property
