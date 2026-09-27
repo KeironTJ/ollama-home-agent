@@ -1,6 +1,24 @@
 let setupToken = "";
+let adminPassword = "";
 const setupDialog = document.querySelector("#setup-dialog");
 const setupStatus = document.querySelector("#setup-status");
+const setupForm = document.querySelector("#setup-form");
+const adminAuthForm = document.querySelector("#admin-auth-form");
+
+function adminHeaders(extra = {}) {
+  const headers = {...extra};
+  if (setupToken) headers["X-Home-Agent-Setup-Token"] = setupToken;
+  if (adminPassword) headers["X-Home-Agent-Admin-Password"] = adminPassword;
+  return headers;
+}
+
+adminAuthForm.addEventListener("submit", event => {
+  event.preventDefault();
+  const input = document.querySelector("#admin-password");
+  adminPassword = input.value;
+  input.value = "";
+  openSetup();
+});
 
 function addSshHostRow(host = {}) {
   const row = document.createElement("div");
@@ -40,7 +58,7 @@ document.querySelector("#discover-crafty").addEventListener("click", async event
   try {
     const response = await fetch("/api/setup/discover/crafty", {
       method: "POST",
-      headers: {"X-Home-Agent-Setup-Token": setupToken},
+      headers: adminHeaders(),
     });
     const body = await response.json();
     if (!response.ok) throw new Error(body.detail || "Crafty discovery failed");
@@ -73,11 +91,26 @@ document.querySelector("#discover-crafty").addEventListener("click", async event
 
 async function openSetup() {
   setupStatus.textContent = "Loading…";
-  setupDialog.showModal();
+  if (!setupDialog.open) setupDialog.showModal();
   try {
-    const response = await fetch("/api/setup");
+    const response = await fetch("/api/setup", {headers: adminHeaders(), cache: "no-store"});
     const config = await response.json();
-    if (!response.ok) throw new Error(config.detail || "Could not load setup");
+    if (response.status === 401) {
+      adminPassword = "";
+      setupForm.hidden = true;
+      adminAuthForm.hidden = false;
+      document.querySelector("#admin-auth-status").textContent = config.detail || "Admin password required";
+      document.querySelector("#admin-password").focus();
+      return;
+    }
+    if (!response.ok) {
+      setupForm.hidden = true;
+      adminAuthForm.hidden = false;
+      document.querySelector("#admin-auth-status").textContent = config.detail || "Could not load setup";
+      return;
+    }
+    adminAuthForm.hidden = true;
+    setupForm.hidden = false;
     setupToken = config.setup_token;
     document.querySelector("#setup-ollama-url").value = config.ollama_url;
     document.querySelector("#setup-ollama-model").value = config.ollama_model;
@@ -128,7 +161,7 @@ document.querySelector("#restart-app").addEventListener("click", async event => 
   try {
     const response = await fetch("/api/restart", {
       method: "POST",
-      headers: {"X-Home-Agent-Setup-Token": setupToken},
+      headers: adminHeaders(),
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.detail || "Could not restart");
@@ -206,7 +239,7 @@ document.querySelector("#setup-form").addEventListener("submit", async event => 
   try {
     const response = await fetch("/api/setup", {
       method: "PUT",
-      headers: {"Content-Type": "application/json", "X-Home-Agent-Setup-Token": setupToken},
+      headers: adminHeaders({"Content-Type": "application/json"}),
       body: JSON.stringify(body),
     });
     const result = await response.json();

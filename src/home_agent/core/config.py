@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     ssh_timeout_seconds: float = Field(default=8, ge=1, le=30)
     ssh_log_lines: int = Field(default=100, ge=10, le=500)
 
+    admin_password: str = ""
+
     approval_ttl_seconds: int = Field(default=300, ge=30, le=3600)
     audit_max_output_chars: int = Field(default=8_000, ge=500, le=50_000)
     whisper_model_size: str = "tiny"

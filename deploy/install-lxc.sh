@@ -164,9 +164,9 @@ Home Agent is installed.
    systemctl --no-pager --full status home-agent
    curl http://127.0.0.1:8080/health
 
-5. Configure through a tunnel from your workstation:
-   ssh -L 8080:127.0.0.1:8080 <lxc-user>@<lxc-ip>
-   Open http://127.0.0.1:8080/?setup=1
+5. For LAN configuration, set HOME_AGENT_ADMIN_PASSWORD in
+   $CONFIG_DIR/home-agent.env, restart, then open:
+   http://<lxc-ip>:8080/?setup=1
 
 Restrict TCP 8080 to your trusted LAN. Do not expose Uvicorn directly to the internet.
 EOF

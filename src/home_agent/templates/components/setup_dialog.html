@@ -4,6 +4,14 @@
     <button type="button" class="icon-button" id="close-setup" aria-label="Close">×</button>
   </div>
   <div class="setup-note">Non-secret settings are stored in <code>home-agent.config.json</code>. Keep the Proxmox token secret in the untracked <code>.env</code> file.</div>
+  <form id="admin-auth-form" hidden>
+    <div class="setup-note">Remote configuration requires the admin password from <code>HOME_AGENT_ADMIN_PASSWORD</code>. It is kept only in this page's memory.</div>
+    <div class="setup-grid">
+      <label class="wide">Admin password<input id="admin-password" type="password" autocomplete="current-password" required></label>
+    </div>
+    <div class="dialog-actions"><button type="submit" class="button primary">Unlock configuration</button></div>
+    <div id="admin-auth-status" role="status"></div>
+  </form>
   <form id="setup-form">
     <div class="setup-section-heading">
       <div><span class="section-kicker">AI compute</span><h3>Ollama device</h3></div>

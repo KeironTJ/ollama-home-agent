@@ -89,7 +89,7 @@ Open <http://127.0.0.1:8080>. Check <http://127.0.0.1:8080/health> if chat repor
 
 The root page is an agent dashboard. Open **Home diagnostics** to use the chat at <http://127.0.0.1:8080/agents/home-diagnostics>. Typed tool results are returned as structured artifacts and rendered as status cards with human-readable CPU, memory, uptime, guests, and ports. Conversations and their artifacts are stored locally in the same SQLite database as the audit data, with secret redaction, bounded message sizes, a 200-message limit per conversation, and a 100-conversation retention limit. The chat sidebar can reopen or delete saved conversations.
 
-Open **Configuration** from the landing dashboard to configure non-secret local settings such as URLs, model, CA path, token ID, and Proxmox allowlists. The setup component writes the ignored `home-agent.config.json` file. Click **Restart application** to stop Uvicorn gracefully, reload configuration, restart on the same port, and refresh the page; this is available when launched with `python -m home_agent`. Setup and restart are available only while the app is bound to and accessed from localhost, and both writes require a per-process anti-CSRF token. The Proxmox token secret is deliberately never returned to or stored by the web page; keep it in `.env`.
+Open **Configuration** from the landing dashboard to configure non-secret local settings such as URLs, model, CA path, token ID, and Proxmox allowlists. The setup component writes the ignored `home-agent.config.json` file. Click **Restart application** to stop Uvicorn gracefully, reload configuration, restart on the same port, and refresh the page; this is available when launched with `python -m home_agent`. Setup and restart are available from localhost when the app is bound to localhost, or from any client when `HOME_AGENT_ADMIN_PASSWORD` is set (see Linux server deployment), and both writes require a per-process anti-CSRF token. The Proxmox token secret is deliberately never returned to or stored by the web page; keep it in `.env`.
 
 ## Always-on server with a Wake-on-LAN Ollama laptop
 
@@ -153,13 +153,15 @@ curl http://127.0.0.1:8080/health
 
 The supplied unit binds to `0.0.0.0`, keeps secrets in a root-owned environment file, stores writable state under `/var/lib/home-agent`, drops privileges, and applies basic systemd hardening. Limit port `8080` to the trusted LAN with the host firewall. For access outside the LAN, use an authenticated VPN or an HTTPS reverse proxy with authentication; do not expose Uvicorn directly to the internet.
 
-Configuration writes intentionally remain localhost-only even when chat is available on the LAN. Administer a remote server through an SSH tunnel:
+To use **Configuration** directly at `http://<lxc-ip>:8080`, set an admin password (12+ characters) in `/etc/home-agent/home-agent.env` and restart:
 
-```powershell
-ssh -L 8080:127.0.0.1:8080 home-agent-server
+```bash
+openssl rand -base64 18   # example generator
+sudoedit /etc/home-agent/home-agent.env   # HOME_AGENT_ADMIN_PASSWORD=...
+systemctl restart home-agent
 ```
 
-Then open <http://127.0.0.1:8080> locally and use **Configuration**. Close the tunnel when finished.
+The Configuration dialog then asks for the password; it is held only in page memory and sent in a request header. Ten wrong attempts lock that client out for five minutes, and failures are audited. Without the password, Configuration is refused for every non-localhost request. Plain HTTP exposes the password to anyone sniffing your LAN, so use this only on a trusted home network; add an HTTPS reverse proxy for anything stronger.
 
 ## Proxmox least-privilege token
 
