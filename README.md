@@ -1,6 +1,6 @@
 # Home Diagnostic Agent
 
-A local, safety-bounded chat UI for investigating a home server with Ollama, the documented Proxmox HTTPS JSON API, and optional restricted SSH diagnostics. It is designed for questions such as **“my Minecraft server stopped working”**.
+An always-on, safety-bounded home-server coordinator with a local web chat, Ollama inference, the documented Proxmox and Crafty HTTPS APIs, and optional restricted SSH diagnostics. Ollama may run beside the app or on an allowlisted Wake-on-LAN laptop.
 
 The agent is read-only by default. Restarting a service or starting/rebooting a guest creates a short-lived pending approval in the UI. Only the explicit **Approve** button can execute it; chat text can never count as approval. Targets are enforced against code-level node, guest, host, service, and port allowlists.
 
@@ -28,6 +28,7 @@ src/home_agent/
 │   ├── crafty.py      # Crafty Controller v2 API client
 │   ├── ollama.py      # local model API client
 │   ├── proxmox.py     # TLS-verified Proxmox API client
+│   ├── wake_on_lan.py # fixed-target magic packet generation
 │   └── errors.py      # safe integration errors
 ├── tools/
 │   ├── crafty.py      # Minecraft/Crafty schemas and operations
@@ -89,6 +90,76 @@ Open <http://127.0.0.1:8080>. Check <http://127.0.0.1:8080/health> if chat repor
 The root page is an agent dashboard. Open **Home diagnostics** to use the chat at <http://127.0.0.1:8080/agents/home-diagnostics>. Typed tool results are returned as structured artifacts and rendered as status cards with human-readable CPU, memory, uptime, guests, and ports. Conversations and their artifacts are stored locally in the same SQLite database as the audit data, with secret redaction, bounded message sizes, a 200-message limit per conversation, and a 100-conversation retention limit. The chat sidebar can reopen or delete saved conversations.
 
 Open **Configuration** from the landing dashboard to configure non-secret local settings such as URLs, model, CA path, token ID, and Proxmox allowlists. The setup component writes the ignored `home-agent.config.json` file. Click **Restart application** to stop Uvicorn gracefully, reload configuration, restart on the same port, and refresh the page; this is available when launched with `python -m home_agent`. Setup and restart are available only while the app is bound to and accessed from localhost, and both writes require a per-process anti-CSRF token. The Proxmox token secret is deliberately never returned to or stored by the web page; keep it in `.env`.
+
+## Always-on server with a Wake-on-LAN Ollama laptop
+
+The FastAPI application is the coordinator. It retains chat history and audit data, selects specialists, exposes tools, validates allowlists, and executes approved operations. The laptop runs only Ollama inference; it receives prompts and tool schemas but no infrastructure credentials.
+
+Configure the laptop from the dashboard or with:
+
+```dotenv
+HOME_AGENT_OLLAMA_URL=http://192.168.1.50:11434
+HOME_AGENT_OLLAMA_MODEL=llama3.1:8b
+HOME_AGENT_OLLAMA_DEVICE_NAME=AI laptop
+HOME_AGENT_OLLAMA_WOL_ENABLED=true
+HOME_AGENT_OLLAMA_WOL_MAC=AA:BB:CC:DD:EE:FF
+HOME_AGENT_OLLAMA_WOL_BROADCAST=192.168.1.255
+HOME_AGENT_OLLAMA_WOL_PORT=9
+HOME_AGENT_OLLAMA_WAKE_TIMEOUT_SECONDS=90
+```
+
+When a chat request arrives, Home Agent first checks `/api/tags`. If Ollama is unavailable, it sends one standard magic packet to the configured MAC/broadcast/port, polls only the configured Ollama URL until the wake deadline, audits the wake, and then starts the normal bounded agent loop. Health checks never wake the laptop.
+
+On the laptop, enable Wake-on-LAN in firmware and the network adapter, arrange for Ollama to start after wake, set Ollama to listen on the LAN interface, and restrict TCP `11434` in the laptop firewall to the Home Agent server IP. Wired Ethernet is recommended; Wake-on-WLAN and wake from full shutdown depend on the laptop hardware.
+
+## Linux server deployment
+
+Run Home Agent in a dedicated unprivileged Debian 12 or Ubuntu LXC rather than on the Proxmox host or Minecraft guest. The installer runs **inside an existing container**; it does not create or configure the LXC itself.
+
+Recommended LXC properties:
+
+- Unprivileged container
+- 2 vCPU, 2 GiB RAM, and 8 GiB disk for the coordinator
+- Bridged network interface on the home LAN so UDP broadcast can reach the laptop
+- Static DHCP reservation
+- `nesting` is not required
+
+Copy or clone this repository into the LXC, then run:
+
+```bash
+cd /path/to/ollama-home-agent
+sudo bash ./deploy/install-lxc.sh
+```
+
+The idempotent installer:
+
+- installs only Python, venv, pip, and CA prerequisites through `apt`;
+- creates the non-login `home-agent` service account;
+- installs the application under `/opt/home-agent`;
+- preserves existing secrets and state on repeat runs;
+- creates `/etc/home-agent/home-agent.env` with mode `0640`;
+- stores writable configuration/audit data under `/var/lib/home-agent`;
+- installs and enables the hardened systemd service;
+- does not start a new installation unless `--start` is supplied.
+
+Edit the environment file and add only the API secrets:
+
+```bash
+sudoedit /etc/home-agent/home-agent.env
+sudo systemctl start home-agent
+sudo systemctl --no-pager --full status home-agent
+curl http://127.0.0.1:8080/health
+```
+
+The supplied unit binds to `0.0.0.0`, keeps secrets in a root-owned environment file, stores writable state under `/var/lib/home-agent`, drops privileges, and applies basic systemd hardening. Limit port `8080` to the trusted LAN with the host firewall. For access outside the LAN, use an authenticated VPN or an HTTPS reverse proxy with authentication; do not expose Uvicorn directly to the internet.
+
+Configuration writes intentionally remain localhost-only even when chat is available on the LAN. Administer a remote server through an SSH tunnel:
+
+```powershell
+ssh -L 8080:127.0.0.1:8080 home-agent-server
+```
+
+Then open <http://127.0.0.1:8080> locally and use **Configuration**. Close the tunnel when finished.
 
 ## Proxmox least-privilege token
 
@@ -183,7 +254,8 @@ The browser records audio and sends it only to this local FastAPI server, where 
 
 ## Safety and audit behavior
 
-- Ollama receives a strict system prompt and a maximum of 5 tool iterations, 4 calls per turn, 45 seconds total, 900 generated tokens per call, and bounded tool output.
+- Ollama receives a strict system prompt and a maximum of 5 tool iterations, 4 calls per turn, 45 seconds of agent execution after compute readiness, 900 generated tokens per call, and bounded tool output.
+- Wake-on-LAN targets only the configured MAC and broadcast address, has a bounded readiness timeout, and exposes no arbitrary packet or remote-command tool.
 - Tool output and logs are treated as untrusted data and cannot become instructions.
 - Mutations produce single-use approval UUIDs that expire after 5 minutes. Approvals are transactionally claimed before execution.
 - Proxmox uses `/api2/json/...`; the UI is never scraped.

@@ -81,6 +81,12 @@ async function openSetup() {
     setupToken = config.setup_token;
     document.querySelector("#setup-ollama-url").value = config.ollama_url;
     document.querySelector("#setup-ollama-model").value = config.ollama_model;
+    document.querySelector("#setup-ollama-device-name").value = config.ollama_device_name;
+    document.querySelector("#setup-ollama-wol-enabled").checked = config.ollama_wol_enabled;
+    document.querySelector("#setup-ollama-wol-mac").value = config.ollama_wol_mac;
+    document.querySelector("#setup-ollama-wol-broadcast").value = config.ollama_wol_broadcast;
+    document.querySelector("#setup-ollama-wol-port").value = config.ollama_wol_port;
+    document.querySelector("#setup-ollama-wake-timeout").value = config.ollama_wake_timeout_seconds;
     document.querySelector("#setup-proxmox-url").value = config.proxmox_url;
     document.querySelector("#setup-token-id").value = config.proxmox_token_id;
     document.querySelector("#setup-ca-file").value = config.proxmox_ca_file;
@@ -162,6 +168,12 @@ document.querySelector("#setup-form").addEventListener("submit", async event => 
   const body = {
     ollama_url: document.querySelector("#setup-ollama-url").value.trim(),
     ollama_model: document.querySelector("#setup-ollama-model").value.trim(),
+    ollama_device_name: document.querySelector("#setup-ollama-device-name").value.trim(),
+    ollama_wol_enabled: document.querySelector("#setup-ollama-wol-enabled").checked,
+    ollama_wol_mac: document.querySelector("#setup-ollama-wol-mac").value.trim(),
+    ollama_wol_broadcast: document.querySelector("#setup-ollama-wol-broadcast").value.trim(),
+    ollama_wol_port: Number(document.querySelector("#setup-ollama-wol-port").value),
+    ollama_wake_timeout_seconds: Number(document.querySelector("#setup-ollama-wake-timeout").value),
     proxmox_url: document.querySelector("#setup-proxmox-url").value.trim(),
     proxmox_token_id: document.querySelector("#setup-token-id").value.trim(),
     proxmox_ca_file: document.querySelector("#setup-ca-file").value.trim(),
@@ -182,6 +194,10 @@ document.querySelector("#setup-form").addEventListener("submit", async event => 
       ssh_port: 22,
     })),
   };
+  if (body.ollama_wol_enabled && !body.ollama_wol_mac) {
+    setupStatus.textContent = "Wake-on-LAN requires the laptop MAC address.";
+    return;
+  }
   if (body.ssh_hosts.some(host => !host.alias || !host.hostname || host.ports.some(port => !Number.isInteger(port) || port < 1 || port > 65535))) {
     setupStatus.textContent = "SSH hosts need an alias and hostname; ports must be valid whole numbers.";
     return;

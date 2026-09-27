@@ -7,3 +7,14 @@ def test_csv_allowlists_parse_from_environment(monkeypatch) -> None:
     settings = Settings(_env_file=None)
     assert settings.proxmox_allowed_nodes == ("pve", "node2")
     assert settings.proxmox_allowed_guests == (100, 101)
+
+
+def test_wake_mac_is_normalized() -> None:
+    settings = Settings(
+        _env_file=None,
+        ollama_wol_mac="aa-bb-cc-dd-ee-ff",
+        ollama_wol_broadcast="192.168.1.255",
+    )
+
+    assert settings.ollama_wol_mac == "AA:BB:CC:DD:EE:FF"
+    assert settings.ollama_wol_broadcast == "192.168.1.255"

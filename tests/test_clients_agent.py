@@ -57,6 +57,11 @@ def test_agent_runs_mocked_tool_loop(settings, approvals, audit) -> None:
     proxmox.request.return_value = {"status": "running", "vmid": 100}
     tools = DiagnosticTools(settings, proxmox, approvals, audit)
     ollama = Mock()
+    ollama.ensure_ready.return_value = {
+        "ready": True,
+        "wake_sent": False,
+        "attempts": 0,
+    }
     ollama.chat.side_effect = [
         {
             "role": "assistant",
@@ -76,6 +81,7 @@ def test_agent_runs_mocked_tool_loop(settings, approvals, audit) -> None:
     result = AgentRunner(settings, ollama, tools, audit).run("Check Minecraft", "session")
     assert result["message"] == "Guest 100 is running."
     assert result["artifacts"][0]["type"] == "guest_status"
+    ollama.ensure_ready.assert_called_once_with()
     assert ollama.chat.call_count == 2
     proxmox.request.assert_called_once()
 

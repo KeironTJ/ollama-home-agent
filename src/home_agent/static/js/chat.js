@@ -286,7 +286,7 @@ form.addEventListener("submit", async event => {
 document.querySelector("#new-chat").addEventListener("click", startNewConversation);
 fetch("/api/config").then(response => response.json()).then(config => {
   document.querySelector("#meta").textContent =
-    `${config.model} · ${config.proxmox_configured ? "Proxmox connected" : "Setup required"}`;
+    `${config.model} on ${config.ollama_device_name} · ${config.proxmox_configured ? "Proxmox connected" : "Setup required"}`;
   const warning = document.querySelector("#warning");
   const insecureServices = [];
   if (config.proxmox_insecure_tls) insecureServices.push("Proxmox");

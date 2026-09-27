@@ -1,0 +1,33 @@
+[Unit]
+Description=Home Agent coordinator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=home-agent
+Group=home-agent
+WorkingDirectory=/opt/home-agent
+EnvironmentFile=/etc/home-agent/home-agent.env
+Environment=HOME_AGENT_HOST=0.0.0.0
+Environment=HOME_AGENT_DATA_DIR=/var/lib/home-agent
+Environment=HOME_AGENT_CONFIG_FILE=/var/lib/home-agent/home-agent.config.json
+ExecStart=/opt/home-agent/.venv/bin/python -m home_agent
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/home-agent
+
+[Install]
+WantedBy=multi-user.target

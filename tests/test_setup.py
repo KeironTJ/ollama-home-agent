@@ -21,6 +21,12 @@ def test_local_setup_saves_only_non_secret_configuration(settings) -> None:
         json={
             "ollama_url": "http://127.0.0.1:11434",
             "ollama_model": "llama3.1:8b",
+            "ollama_device_name": "AI laptop",
+            "ollama_wol_enabled": True,
+            "ollama_wol_mac": "aa-bb-cc-dd-ee-ff",
+            "ollama_wol_broadcast": "192.168.1.255",
+            "ollama_wol_port": 9,
+            "ollama_wake_timeout_seconds": 90,
             "proxmox_url": "https://192.168.1.232:8006",
             "proxmox_token_id": "home-agent@pve!diagnostic",
             "proxmox_ca_file": "C:\\certs\\pve.pem",
@@ -45,6 +51,8 @@ def test_local_setup_saves_only_non_secret_configuration(settings) -> None:
     )
     assert response.status_code == 200
     saved = json.loads(settings.config_file.read_text(encoding="utf-8"))
+    assert saved["ollama_device_name"] == "AI laptop"
+    assert saved["ollama_wol_mac"] == "AA:BB:CC:DD:EE:FF"
     assert saved["proxmox_allowed_guests"] == [100]
     assert saved["crafty_allowed_servers"] == ["server-one", "server-two"]
     assert '"minecraft"' in saved["ssh_hosts_json"]
@@ -62,6 +70,28 @@ def test_setup_write_requires_csrf_token(settings) -> None:
         },
     )
     assert response.status_code == 403
+
+
+def test_setup_requires_mac_when_wake_is_enabled(settings) -> None:
+    client = TestClient(create_app(settings), client=("127.0.0.1", 50000))
+    setup_token = client.get("/api/setup").json()["setup_token"]
+
+    response = client.put(
+        "/api/setup",
+        headers={"X-Home-Agent-Setup-Token": setup_token},
+        json={
+            "ollama_url": "http://192.0.2.50:11434",
+            "ollama_model": "llama3.1:8b",
+            "ollama_device_name": "AI laptop",
+            "ollama_wol_enabled": True,
+            "ollama_wol_mac": "",
+            "ollama_wol_broadcast": "192.0.2.255",
+            "proxmox_url": "https://192.168.1.232:8006",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "MAC address" in response.json()["detail"]
 
 
 def test_setup_rejects_user_id_without_api_token_name(settings) -> None:

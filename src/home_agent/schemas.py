@@ -26,6 +26,12 @@ class SshHostConfig(BaseModel):
 class SetupConfig(BaseModel):
     ollama_url: str = Field(min_length=1, max_length=500)
     ollama_model: str = Field(min_length=1, max_length=100)
+    ollama_device_name: str = Field(default="Local Ollama", min_length=1, max_length=100)
+    ollama_wol_enabled: bool = False
+    ollama_wol_mac: str = Field(default="", max_length=17)
+    ollama_wol_broadcast: str = Field(default="255.255.255.255", max_length=15)
+    ollama_wol_port: int = Field(default=9, ge=1, le=65_535)
+    ollama_wake_timeout_seconds: float = Field(default=90, ge=10, le=300)
     proxmox_url: str = Field(min_length=1, max_length=500)
     proxmox_token_id: str = Field(default="", max_length=200)
     proxmox_ca_file: str = Field(default="", max_length=1_000)

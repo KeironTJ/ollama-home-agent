@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import httpx
 
 from ..core.config import Settings
 from .errors import ExternalServiceError
+from .wake_on_lan import send_magic_packet
 
 
 class OllamaClient:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, wake_sender=send_magic_packet):
         self.settings = settings
+        self._wake_sender = wake_sender
 
     def chat(
         self,
@@ -55,9 +58,9 @@ class OllamaClient:
             )
         return message
 
-    def health(self) -> dict[str, Any]:
+    def health(self, timeout_seconds: float = 3) -> dict[str, Any]:
         try:
-            with httpx.Client(timeout=3) as client:
+            with httpx.Client(timeout=timeout_seconds) as client:
                 response = client.get(
                     f"{self.settings.ollama_url.rstrip('/')}/api/tags"
                 )
@@ -66,6 +69,69 @@ class OllamaClient:
                     item.get("name")
                     for item in response.json().get("models", [])
                 ]
-            return {"ok": True, "models": models}
+            return {
+                "ok": True,
+                "state": "ready",
+                "models": models,
+                "device": self.settings.ollama_device_name,
+                "wake_enabled": self.settings.ollama_wol_configured,
+            }
         except Exception as exc:
-            return {"ok": False, "error": str(exc)}
+            return {
+                "ok": False,
+                "state": (
+                    "standby"
+                    if self.settings.ollama_wol_configured
+                    else "unavailable"
+                ),
+                "error": str(exc),
+                "device": self.settings.ollama_device_name,
+                "wake_enabled": self.settings.ollama_wol_configured,
+            }
+
+    def ensure_ready(self) -> dict[str, Any]:
+        status = self.health()
+        if status["ok"]:
+            return {"ready": True, "wake_sent": False, "attempts": 0}
+        if not self.settings.ollama_wol_enabled:
+            raise ExternalServiceError(
+                f"Cannot reach Ollama at {self.settings.ollama_url}. "
+                f"Compute device '{self.settings.ollama_device_name}' is offline "
+                "and Wake-on-LAN is disabled."
+            )
+        if not self.settings.ollama_wol_mac:
+            raise ExternalServiceError(
+                "Wake-on-LAN is enabled but no valid MAC address is configured"
+            )
+
+        try:
+            self._wake_sender(
+                self.settings.ollama_wol_mac,
+                self.settings.ollama_wol_broadcast,
+                self.settings.ollama_wol_port,
+            )
+        except OSError as exc:
+            raise ExternalServiceError(
+                f"Could not send Wake-on-LAN packet for "
+                f"'{self.settings.ollama_device_name}': {exc}"
+            ) from exc
+
+        deadline = time.monotonic() + self.settings.ollama_wake_timeout_seconds
+        attempts = 0
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            time.sleep(min(self.settings.ollama_wake_poll_seconds, remaining))
+            attempts += 1
+            remaining = max(0.1, deadline - time.monotonic())
+            status = self.health(timeout_seconds=min(2, remaining))
+            if status["ok"]:
+                return {
+                    "ready": True,
+                    "wake_sent": True,
+                    "attempts": attempts,
+                }
+
+        raise ExternalServiceError(
+            f"Woke '{self.settings.ollama_device_name}', but Ollama did not "
+            f"become ready within {self.settings.ollama_wake_timeout_seconds:g} seconds"
+        )

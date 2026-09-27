@@ -15,6 +15,8 @@ def public_config(services: Services) -> dict[str, Any]:
     )
     return {
         "model": settings.ollama_model,
+        "ollama_device_name": settings.ollama_device_name,
+        "ollama_wake_enabled": settings.ollama_wol_configured,
         "proxmox_configured": services.proxmox.configured,
         "crafty_configured": services.crafty.configured,
         "insecure_tls": insecure_tls,
@@ -31,11 +33,20 @@ def public_config(services: Services) -> dict[str, Any]:
 def health(services: Services) -> dict[str, Any]:
     ollama_status = services.ollama.health()
     crafty_status = services.crafty.health()
-    healthy = ollama_status["ok"] and (
+    crafty_healthy = (
         not services.crafty.configured or crafty_status["ok"]
     )
+    if ollama_status["ok"] and crafty_healthy:
+        status = "ok"
+    elif (
+        ollama_status.get("state") == "standby"
+        and crafty_healthy
+    ):
+        status = "standby"
+    else:
+        status = "degraded"
     return {
-        "status": "ok" if healthy else "degraded",
+        "status": status,
         "ollama": ollama_status,
         "crafty": crafty_status,
         "proxmox_configured": services.proxmox.configured,

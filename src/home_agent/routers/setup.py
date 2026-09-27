@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import threading
+from ipaddress import IPv4Address
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..dependencies import Services, require_local_request, require_setup_token
+from ..core.config import normalize_mac_address
 from ..integrations import ExternalServiceError
 from ..schemas import SetupConfig
 
@@ -26,6 +28,12 @@ def get_setup(
         "setup_token": request.app.state.setup_token,
         "ollama_url": settings.ollama_url,
         "ollama_model": settings.ollama_model,
+        "ollama_device_name": settings.ollama_device_name,
+        "ollama_wol_enabled": settings.ollama_wol_enabled,
+        "ollama_wol_mac": settings.ollama_wol_mac,
+        "ollama_wol_broadcast": settings.ollama_wol_broadcast,
+        "ollama_wol_port": settings.ollama_wol_port,
+        "ollama_wake_timeout_seconds": settings.ollama_wake_timeout_seconds,
         "proxmox_url": settings.proxmox_url,
         "proxmox_token_id": settings.proxmox_token_id,
         "proxmox_token_secret_configured": bool(settings.proxmox_token_secret),
@@ -72,6 +80,16 @@ def save_setup(
         )
     if not body.ollama_url.lower().startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Ollama URL must use HTTP or HTTPS")
+    try:
+        wol_mac = normalize_mac_address(body.ollama_wol_mac)
+        wol_broadcast = str(IPv4Address(body.ollama_wol_broadcast.strip()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if body.ollama_wol_enabled and not wol_mac:
+        raise HTTPException(
+            status_code=400,
+            detail="Wake-on-LAN requires a configured MAC address",
+        )
     if body.crafty_url and not body.crafty_url.lower().startswith("https://"):
         raise HTTPException(status_code=400, detail="Crafty Controller URL must use HTTPS")
     if any(not node.strip() for node in body.proxmox_allowed_nodes):
@@ -85,6 +103,8 @@ def save_setup(
         raise HTTPException(status_code=500, detail="Local config file is disabled")
 
     config = body.model_dump()
+    config["ollama_wol_mac"] = wol_mac
+    config["ollama_wol_broadcast"] = wol_broadcast
     ssh_hosts = config.pop("ssh_hosts")
     config["proxmox_allowed_nodes"] = sorted(
         set(node.strip() for node in body.proxmox_allowed_nodes)

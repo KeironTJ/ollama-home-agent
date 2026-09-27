@@ -4,11 +4,28 @@ from __future__ import annotations
 
 import json
 import os
+import re
+from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Annotated, Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+MAC_ADDRESS_PATTERN = re.compile(
+    r"^(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$"
+)
+
+
+def normalize_mac_address(value: str) -> str:
+    value = value.strip()
+    if not value:
+        return ""
+    if not MAC_ADDRESS_PATTERN.fullmatch(value):
+        raise ValueError(
+            "Wake-on-LAN MAC address must contain six hexadecimal octets"
+        )
+    return ":".join(part.upper() for part in re.split("[:-]", value))
 
 
 class Settings(BaseSettings):
@@ -26,6 +43,13 @@ class Settings(BaseSettings):
 
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.1:8b"
+    ollama_device_name: str = "Local Ollama"
+    ollama_wol_enabled: bool = False
+    ollama_wol_mac: str = ""
+    ollama_wol_broadcast: str = "255.255.255.255"
+    ollama_wol_port: int = Field(default=9, ge=1, le=65_535)
+    ollama_wake_timeout_seconds: float = Field(default=90, ge=10, le=300)
+    ollama_wake_poll_seconds: float = Field(default=2, ge=0.5, le=10)
     max_agent_iterations: int = Field(default=5, ge=1, le=10)
     request_timeout_seconds: float = Field(default=45, ge=5, le=120)
     max_tool_output_chars: int = Field(default=12_000, ge=1_000, le=50_000)
@@ -75,6 +99,25 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return tuple(item.strip() for item in value.split(",") if item.strip())
         return value
+
+    @field_validator("ollama_wol_mac", mode="before")
+    @classmethod
+    def validate_wol_mac(cls, value: Any) -> str:
+        return normalize_mac_address(str(value or ""))
+
+    @field_validator("ollama_wol_broadcast")
+    @classmethod
+    def validate_wol_broadcast(cls, value: str) -> str:
+        try:
+            return str(IPv4Address(value.strip()))
+        except ValueError as exc:
+            raise ValueError(
+                "Wake-on-LAN broadcast address must be an IPv4 address"
+            ) from exc
+
+    @property
+    def ollama_wol_configured(self) -> bool:
+        return bool(self.ollama_wol_enabled and self.ollama_wol_mac)
 
     @property
     def database_path(self) -> Path:

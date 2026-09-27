@@ -5,9 +5,24 @@
   </div>
   <div class="setup-note">Non-secret settings are stored in <code>home-agent.config.json</code>. Keep the Proxmox token secret in the untracked <code>.env</code> file.</div>
   <form id="setup-form">
+    <div class="setup-section-heading">
+      <div><span class="section-kicker">AI compute</span><h3>Ollama device</h3></div>
+    </div>
     <div class="setup-grid">
-      <label>Ollama URL<input id="setup-ollama-url" required></label>
+      <label>Device name<input id="setup-ollama-device-name" required placeholder="AI laptop"></label>
+      <label>Ollama URL<input id="setup-ollama-url" required placeholder="http://192.168.1.50:11434"></label>
       <label>Ollama model<input id="setup-ollama-model" required></label>
+      <label class="wide checkbox"><input type="checkbox" id="setup-ollama-wol-enabled"><span>Wake this device automatically when Ollama is offline</span></label>
+      <label>Device MAC address<input id="setup-ollama-wol-mac" placeholder="AA:BB:CC:DD:EE:FF"></label>
+      <label>Broadcast address<input id="setup-ollama-wol-broadcast" placeholder="192.168.1.255"></label>
+      <label>Wake UDP port<input id="setup-ollama-wol-port" type="number" min="1" max="65535"></label>
+      <label>Wake timeout (seconds)<input id="setup-ollama-wake-timeout" type="number" min="10" max="300"></label>
+    </div>
+    <div class="setup-note">Wake-on-LAN sends one magic packet only to this configured MAC address, then waits for Ollama. It does not provide remote shell access.</div>
+    <div class="setup-section-heading">
+      <div><span class="section-kicker">Virtualization</span><h3>Proxmox</h3></div>
+    </div>
+    <div class="setup-grid">
       <label class="wide">Proxmox HTTPS URL<input id="setup-proxmox-url" required></label>
       <label class="wide">Proxmox token ID<input id="setup-token-id" placeholder="home-agent@pve!diagnostic"></label>
       <label class="wide">Proxmox CA certificate path<input id="setup-ca-file" placeholder="C:\Users\you\.config\home-agent\pve-root-ca.pem"></label>

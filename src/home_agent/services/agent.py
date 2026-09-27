@@ -58,6 +58,34 @@ class AgentRunner:
             message = f"{reason} I did not substitute SSH or run any diagnostic tool."
             self.audit.record("assistant_message", session_id=session_id, output_data=message, success=False)
             return {"message": message, "pending_approval": None, "artifacts": []}
+        try:
+            readiness = self.ollama.ensure_ready()
+        except ExternalServiceError as exc:
+            self.audit.record(
+                "compute_readiness_failed",
+                session_id=session_id,
+                name=self.settings.ollama_device_name,
+                input_data={
+                    "device": self.settings.ollama_device_name,
+                    "ollama_url": self.settings.ollama_url,
+                    "wake_enabled": self.settings.ollama_wol_configured,
+                },
+                output_data=str(exc),
+                success=False,
+            )
+            raise
+        if isinstance(readiness, dict) and readiness.get("wake_sent"):
+            self.audit.record(
+                "compute_device_woken",
+                session_id=session_id,
+                name=self.settings.ollama_device_name,
+                input_data={
+                    "device": self.settings.ollama_device_name,
+                    "ollama_url": self.settings.ollama_url,
+                },
+                output_data={"attempts": readiness.get("attempts", 0)},
+                success=True,
+            )
         target_context = (
             "\nConfigured targets (identifiers only; do not invent others): "
             f"Proxmox nodes={list(self.settings.proxmox_allowed_nodes)}, "
