@@ -3,7 +3,18 @@ const form = document.querySelector("#chat-form");
 const message = document.querySelector("#message");
 const send = document.querySelector("#send");
 const voice = document.querySelector("#voice");
-let sessionId = crypto.randomUUID();
+
+// crypto.randomUUID requires a secure context; plain-HTTP LAN pages lack it.
+function newSessionId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+let sessionId = newSessionId();
 let conversations = [];
 let recorder;
 let chunks = [];
@@ -164,7 +175,7 @@ function addMessage(text, kind = "assistant", artifacts = []) {
 }
 
 function startNewConversation() {
-  sessionId = crypto.randomUUID();
+  sessionId = newSessionId();
   chat.replaceChildren();
   addMessage("Describe the problem. I will use only configured, allowlisted diagnostics and will ask before any change.");
   renderHistory();
